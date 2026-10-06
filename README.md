@@ -8,6 +8,6 @@ XOO   -Player 2 is susseptiable to being captured
 
 XOOX  -Player 1 plays to capture the pair
 
-X  X  -Player 1 captures the pair and those two spaces on the board free up
+X    X  -Player 1 captures the pair and those two spaces on the board free up
 
 This can also be done in a diagonal fasion as the game is played on a grid.
