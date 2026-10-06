@@ -1,7 +1,7 @@
 # CS 457 Project Statement of Work (SOW) & Protocol Specification Template
 
 **Student Name:** Bode Kaanta  
-**Date:** 2026/21/09  
+**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1)  
 **Course:** CS 457 - Computer Networks  
 **Target Server Domain:** `server.kaanta.edu`  
 
@@ -22,47 +22,52 @@
 - **Game Summary:** The goal is to either get 5 in a row or capture 5 pairs. A player can only place down one marker per tern. It is played on somthing very similar to a go board.
 
 ### 1.2 Core Game Rules & Win/Draw Conditions
-- **Turn Mechanics:** I will use a counter called Turn. If the turn number % the player number is == 0 then it is that players turn.
+- **Turn Mechanics:** The server keeps a counter `turn_number` (starts at 0, +1 after each legal move). It is P1's turn when `turn_number % 2 == 0` and P2's turn otherwise. P1 (first to connect) always moves first.
 - **Victory Condition:** The player who wins is the person who either gets 5 of their peices in a row, or is able to catpure 5 pairs. 
-- **Draw/Tie Condition:** There are no draws in this game, one player will always win and one will always lose.
+- **Draw/Tie Condition:** There are no draws in Pente; one player always wins. As a safety rule for the theoretical case of a completely full board with no winner, the player with more captured pairs wins, and if those are tied, P2 wins.
 
 ---
 
 ## 2. Application-Layer Messaging Protocol Blueprint (Sprint 1 Deliverable)
 
+> Full specifications: [`docs/protocol_blueprint.md`](docs/protocol_blueprint.md), [`docs/fsm_specification.md`](docs/fsm_specification.md), [`docs/ai_prompts.md`](docs/ai_prompts.md)
+
 ### 2.1 Message Transport & Serialization Format
-- **Transport Protocol:** TCP
-- **Serialization Format:** [JSON / Fixed-Header Binary / Delimited Text]
-- **Framing Mechanism:** [e.g., Newline-delimited (`\n`) JSON payloads OR 4-byte big-endian length prefix]
+- **Transport Protocol:** TCP (port `5457`)
+- **Serialization Format:** JSON (UTF-8, compact)
+- **Framing Mechanism:** Newline-delimited (`\n`) JSON payloads, one JSON object per line, max 8192 bytes. The receiver buffers bytes and splits on `\n` to handle TCP coalescing and fragmentation.
 
 ### 2.2 Message Schema Definitions
 
 #### Message Types:
-1. `CONNECT` (Client -> Server): Request to join the game room.
-2. `LOBBY_WAIT` (Server -> Client): Notification that server is waiting for Player 2.
-3. `GAME_START` (Server -> Clients): Game initiated, assigns roles (e.g. Player X vs Player O).
-4. `MOVE` (Client -> Server): Player action (e.g., cell coordinates or answer choice).
-5. `STATE_UPDATE` (Server -> Clients): Broadcast current game board / state and active player turn.
-6. `GAME_OVER` (Server -> Clients): Victory / Draw notification with final scores.
-7. `ERROR` (Server -> Client): Invalid move or malformed packet error.
+1. `CONNECT` (Client -> Server): Request to join the game room with an alias.
+2. `LOBBY_WAIT` (Server -> Client): Notification that the server is waiting for Player 2.
+3. `GAME_START` (Server -> Clients): Game initiated (or resumed); assigns roles P1/P2 and a reconnect session token.
+4. `MOVE` (Client -> Server): Place a stone. The player types a chess-style label like `K10` (columns A–S, rows 1–19, row 1 at the bottom); the client converts it to integer `row`, `col` (0-18) before sending.
+5. `STATE_UPDATE` (Server -> Clients): Broadcast board, captured pairs, turn number, active player, and game status.
+6. `ERROR` (Server -> Client): Invalid/out-of-turn move or malformed packet (15 defined error codes).
+7. `DISCONNECT` (Client -> Server): Intentional quit, which forfeits immediately.
+8. `GAME_OVER` (Server -> Clients): WIN / FORFEIT notification (winner, win reason) with final board and captures.
+9. `RECONNECT` (Client -> Server): Rejoin an in-progress game within the 60-second grace period.
+10. `PLAYER_STATUS` (Server -> Client): Opponent disconnected / reconnected notice.
 
 #### Example JSON Protocol Schema:
 ```json
 {
   "msg_type": "MOVE",
-  "player_id": "Player_1",
+  "player_id": "P1",
   "payload": {
-    "row": 0,
-    "col": 2
+    "row": 9,
+    "col": 9
   },
-  "timestamp": 1727000000
+  "timestamp": 1791266420
 }
 ```
 
 ---
 
 ### 2.3 Game State Machine (FSM) Design (Sprint 1 Deliverable)
-- **State Transitions:** Detail state flow: `INIT` -> `WAITING_FOR_PLAYERS` -> `PLAYER_TURN` -> `EVALUATE_MOVE` -> `CHECK_WIN_DRAW` -> `GAME_OVER` -> `CLEANUP`.
+- **State Transitions:** `INIT` -> `WAITING_FOR_PLAYERS` -> `GAME_START` -> `PLAYER_TURN` -> `EVALUATE_MOVE` -> `CHECK_WIN` -> (`PLAYER_TURN` | `GAME_OVER`) -> `CLEANUP` -> `WAITING_FOR_PLAYERS`. An unexpected drop moves `PLAYER_TURN` -> `PAUSED_RECONNECT` (60 s grace) -> `PLAYER_TURN` on rejoin or `GAME_OVER` (forfeit) on timeout. See the Mermaid diagram in `docs/fsm_specification.md`.
 
 ---
 
