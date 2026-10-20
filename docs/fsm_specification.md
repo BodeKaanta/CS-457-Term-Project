@@ -2,10 +2,10 @@
 
 **Project:** CS 457 Term Project: Networked Pente
 **Author:** Bode Kaanta
-**Sprint:** 1 (Application Protocol & FSM Design)
-**Related docs:** [`protocol_blueprint.md`](protocol_blueprint.md) (message schemas and error codes) · [`ai_prompts.md`](ai_prompts.md)
+**Sprint:** 1 (Application Protocol & FSM Design), updated in Sprint 2 (round scoring, `SCORE_UPDATE`, session leaderboard)
+**Related docs:** [`protocol_blueprint.md`](protocol_blueprint.md) (message schemas and error codes) · [`concurrency_design.md`](concurrency_design.md) (threads, locking, scoring) · [`sequence_diagram.md`](sequence_diagram.md) · [`ai_prompts.md`](ai_prompts.md)
 
-The game is played entirely in the **terminal**: clients print the board as text and read moves as typed input. The server holds **one** game room with exactly one FSM instance. The FSM is the only component allowed to mutate game state. Socket handler threads translate network events into FSM **events** and call `fsm.dispatch(event)` while holding a single `threading.Lock`, so transitions are atomic.
+The game is played entirely in the **terminal**: clients print the board as text and read moves as typed input. The server holds **one** game room with exactly one FSM instance. The FSM is the only component allowed to mutate game state. Socket handler threads translate network events into FSM **events** and call `fsm.dispatch(event)` while holding a single `threading.Lock`, so transitions are atomic. The full threading design (which thread runs each transition, critical sections, and broadcast rules) is in [`concurrency_design.md`](concurrency_design.md).
 
 ---
 
@@ -54,13 +54,13 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 |---|---|---|---|
 | `INIT` | Server process starting | Load config (`PORT=5457`, `GRACE_PERIOD_SEC=60`), create a listening TCP socket (`SO_REUSEADDR`), create the empty `GameState` | `WAITING_FOR_PLAYERS` |
 | `WAITING_FOR_PLAYERS` | Lobby; composite state with substates `LOBBY_EMPTY` (0 seated) and `ONE_PLAYER` (P1 seated) | `accept()` new connections, enable TCP keepalive on each | `GAME_START` |
-| `GAME_START` | Transient: both seats are filled | Assign roles (**first `CONNECT` = `P1`, moves first; second = `P2`**), generate a `session_token` per player, send each player `GAME_START`, broadcast initial `STATE_UPDATE` | `PLAYER_TURN` |
+| `GAME_START` | Transient: both seats are filled | Assign roles (**first `CONNECT` = `P1`, moves first; second = `P2`**), `game_id += 1`, generate a `session_token` per player, send each player `GAME_START`, send both `SCORE_UPDATE (STANDINGS)`, broadcast initial `STATE_UPDATE` | `PLAYER_TURN` |
 | `PLAYER_TURN` | Waiting for the active player's `MOVE` | Broadcast `STATE_UPDATE` with `active_player` | `EVALUATE_MOVE`, `GAME_OVER`, `PAUSED_RECONNECT` |
 | `EVALUATE_MOVE` | Transient: validate coordinates and apply the move | Bounds and occupancy checks; place stone; resolve captures | `PLAYER_TURN` (rejected), `CHECK_WIN` |
 | `CHECK_WIN` | Transient: check win conditions after a legal move (Pente has no draws) | Five-in-a-row scan from the placed stone; capture count ≥ 5; board-full safety check | `PLAYER_TURN`, `GAME_OVER` |
 | `PAUSED_RECONNECT` | One player dropped unexpectedly; game frozen for up to 60 s | Send `PLAYER_STATUS DISCONNECTED` and `STATE_UPDATE (PAUSED_RECONNECT)` to the remaining player; start `threading.Timer(60)` | `PLAYER_TURN`, `GAME_OVER`, `CLEANUP` |
-| `GAME_OVER` | Result decided | Broadcast final `STATE_UPDATE (FINISHED)` and `GAME_OVER` to every **still-connected** player | `CLEANUP` |
-| `CLEANUP` | Release all game resources | Cancel the grace timer; revoke tokens; close every player socket (send failures ignored); reset `GameState` (empty board, `turn_number=0`, captures 0/0) | `WAITING_FOR_PLAYERS` (post-game reset for the next round) |
+| `GAME_OVER` | Result decided | Score the round (§4.1) and update the session leaderboard; broadcast final `STATE_UPDATE (FINISHED)`, `GAME_OVER`, then `SCORE_UPDATE (ROUND_COMPLETE)` to every **still-connected** player | `CLEANUP` |
+| `CLEANUP` | Release all game resources | Cancel the grace timer; revoke tokens; clear seats; `shutdown()` every player socket (each handler thread then closes its own); reset `GameState` (empty board, `turn_number=0`, captures 0/0). The session **leaderboard is kept** | `WAITING_FOR_PLAYERS` (post-game reset for the next round) |
 
 **Post-game reset:** after every game, including forfeits and abandoned games, the server returns to `WAITING_FOR_PLAYERS` with an empty lobby. Players who want another round reconnect with `CONNECT`. The server process never needs a restart between games.
 
@@ -72,19 +72,19 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 
 | # | Current state | Event | Guard | Action | Next state |
 |---|---|---|---|---|---|
-| L1 | `LOBBY_EMPTY` | `CONNECT` | alias valid, version 1 | Seat as P1; send `LOBBY_WAIT` | `ONE_PLAYER` |
-| L2 | `LOBBY_EMPTY` | `CONNECT` | alias invalid / version wrong | `ERROR INVALID_ALIAS` / `VERSION_MISMATCH` (fatal); close | `LOBBY_EMPTY` |
+| L1 | `LOBBY_EMPTY` | `CONNECT` | alias valid, version 1 | Seat as P1; send `LOBBY_WAIT`, then `SCORE_UPDATE (STANDINGS)` | `ONE_PLAYER` |
+| L2 | `LOBBY_EMPTY` | `CONNECT` | alias invalid / version wrong | `ERROR INVALID_ALIAS` / `VERSION_MISMATCH` (fatal); handler closes that socket | `LOBBY_EMPTY` |
 | L3 | `ONE_PLAYER` | `CONNECT` (2nd socket) | valid, alias ≠ P1 alias | Seat as P2 | `GAME_START` |
-| L4 | `ONE_PLAYER` | `CONNECT` (2nd socket) | alias == P1 alias | `ERROR ALIAS_TAKEN` (fatal); close that socket only | `ONE_PLAYER` |
+| L4 | `ONE_PLAYER` | `CONNECT` (2nd socket) | alias == P1 alias | `ERROR ALIAS_TAKEN` (fatal); handler closes that socket only | `ONE_PLAYER` |
 | L5 | `ONE_PLAYER` | `MOVE` / `RECONNECT` / unknown | — | `ERROR GAME_NOT_ACTIVE` / `INVALID_TOKEN` | `ONE_PLAYER` |
-| L6 | `ONE_PLAYER` | `DISCONNECT` or `CONN_LOST` from P1 | — | Free seat, close socket (no game exists, so no forfeit) | `LOBBY_EMPTY` |
-| L7 | any game state | `CONNECT` from a 3rd socket | — | `ERROR ROOM_FULL` (fatal); close that socket only | unchanged |
+| L6 | `ONE_PLAYER` | `DISCONNECT` or `CONN_LOST` from P1 | — | Free seat; handler closes its socket (no game exists, so no forfeit) | `LOBBY_EMPTY` |
+| L7 | any game state | `CONNECT` from a 3rd socket | — | `ERROR ROOM_FULL` (fatal); handler closes that socket only | unchanged |
 
 ### 3.2 Gameplay
 
 | # | Current state | Event | Guard | Action | Next state |
 |---|---|---|---|---|---|
-| G1 | `GAME_START` | (automatic) | — | `GAME_START` to each player; `STATE_UPDATE` (turn 0, active P1) | `PLAYER_TURN` |
+| G1 | `GAME_START` | (automatic) | — | `game_id += 1`; `GAME_START` to each player; `SCORE_UPDATE (STANDINGS)` to both; `STATE_UPDATE` (turn 0, active P1) | `PLAYER_TURN` |
 | G2 | `PLAYER_TURN` | `MOVE` | sender == active player, payload ints | — | `EVALUATE_MOVE` |
 | G3 | `PLAYER_TURN` | `MOVE` | sender ≠ active player | `ERROR NOT_YOUR_TURN` to sender | `PLAYER_TURN` |
 | G4 | `PLAYER_TURN` | malformed frame / unknown type / missing field / bad types / `player_id` mismatch | — | `ERROR MALFORMED_JSON` / `UNKNOWN_MSG_TYPE` / `MISSING_FIELD` / `INVALID_PAYLOAD` / `PLAYER_ID_MISMATCH` to sender | `PLAYER_TURN` |
@@ -100,15 +100,26 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 
 | # | Current state | Event | Guard | Action | Next state |
 |---|---|---|---|---|---|
-| D1 | `PLAYER_TURN` | `DISCONNECT` message from Px | — | Close Px socket; opponent wins: `FORFEIT`, `OPPONENT_QUIT` | `GAME_OVER` |
-| D2 | `PLAYER_TURN` | `CONN_LOST` from Px (EOF `b""`, `ConnectionResetError`, `ConnectionAbortedError`, `BrokenPipeError`, keepalive timeout) | opponent still connected | Close Px socket; send `PLAYER_STATUS DISCONNECTED (60)` and `STATE_UPDATE PAUSED_RECONNECT` to the opponent; start the 60 s timer | `PAUSED_RECONNECT` |
+| D1 | `PLAYER_TURN` | `DISCONNECT` message from Px | — | Mark Px seat disconnected (its handler closes the socket); opponent wins: `FORFEIT`, `OPPONENT_QUIT` | `GAME_OVER` |
+| D2 | `PLAYER_TURN` | `CONN_LOST` from Px (EOF `b""`, `ConnectionResetError`, `ConnectionAbortedError`, `BrokenPipeError`, keepalive timeout) | opponent still connected | Mark Px seat disconnected (its handler closes the socket); `pause_seq += 1`; send `PLAYER_STATUS DISCONNECTED (60)` and `STATE_UPDATE PAUSED_RECONNECT` to the opponent; start the 60 s timer with `(game_id, pause_seq)` | `PAUSED_RECONNECT` |
 | D3 | `PLAYER_TURN` | `CONN_LOST` from both (simultaneous) | no one connected | — | `CLEANUP` |
-| D4 | `PAUSED_RECONNECT` | `RECONNECT` (new socket) | alias and token match the paused seat, timer not expired | Cancel timer; bind socket to seat; `GAME_START (resumed:true)` to the rejoiner; `PLAYER_STATUS RECONNECTED` to the opponent; broadcast `STATE_UPDATE ACTIVE` | `PLAYER_TURN` (same `active_player` as before the drop) |
-| D5 | `PAUSED_RECONNECT` | `RECONNECT` | bad alias or token | `ERROR INVALID_TOKEN` (fatal); close **that** socket only | `PAUSED_RECONNECT` |
+| D4 | `PAUSED_RECONNECT` | `RECONNECT` (new socket) | alias and token match the paused seat, timer not expired | Cancel timer; bind socket to seat; `GAME_START (resumed:true)` and `SCORE_UPDATE (STANDINGS)` to the rejoiner; `PLAYER_STATUS RECONNECTED` to the opponent; broadcast `STATE_UPDATE ACTIVE` | `PLAYER_TURN` (same `active_player` as before the drop) |
+| D5 | `PAUSED_RECONNECT` | `RECONNECT` | bad alias or token | `ERROR INVALID_TOKEN` (fatal); handler closes **that** socket only | `PAUSED_RECONNECT` |
 | D6 | `PAUSED_RECONNECT` | `MOVE` from remaining player | — | `ERROR GAME_NOT_ACTIVE` | `PAUSED_RECONNECT` |
-| D7 | `PAUSED_RECONNECT` | `GRACE_TIMEOUT` (timer fires) | — | Remaining player wins: `FORFEIT`, `OPPONENT_TIMEOUT` | `GAME_OVER` |
-| D8 | `PAUSED_RECONNECT` | `DISCONNECT` or `CONN_LOST` from the remaining player | — | Both gone → game abandoned; nobody to notify | `CLEANUP` |
+| D7 | `PAUSED_RECONNECT` | `GRACE_TIMEOUT` (timer fires) | state is still `PAUSED_RECONNECT` with the timer's `game_id` and `pause_seq` (stale-timer guard; otherwise ignore) | Remaining player wins: `FORFEIT`, `OPPONENT_TIMEOUT` | `GAME_OVER` |
+| D8 | `PAUSED_RECONNECT` | `DISCONNECT` or `CONN_LOST` from the remaining player | — | Both gone → game abandoned; nobody to notify; the game is **not scored** | `CLEANUP` |
 | D9 | `GAME_OVER` / `CLEANUP` | any `CONN_LOST` / send failure | — | Ignore (sockets are being closed anyway) | unchanged |
+
+### 3.4 Connections Without a Seat (added in Sprint 2)
+
+Applies in **every** state, including `LOBBY_EMPTY` and a new game that started after `CLEANUP`. It covers connections that have not been seated yet and old connections whose seat was cleared by `CLEANUP`. It is checked before the tables above.
+
+| # | Event from a connection that holds no seat | Action | Next state |
+|---|---|---|---|
+| X1 | `CONN_LOST` / `DISCONNECT` | Ignore (unregister only; the handler closes its socket) | unchanged |
+| X2 | `MOVE` | `ERROR GAME_NOT_ACTIVE` | unchanged |
+| X3 | `RECONNECT` and no seat is paused (e.g. the grace timer already ended the game) | `ERROR INVALID_TOKEN` (fatal) | unchanged |
+| X4 | `CONNECT` | Handled by L1–L4 / L7 | per those rows |
 
 **Why the two kinds of disconnect are treated differently:** a `DISCONNECT` message is an explicit decision to quit, so it forfeits immediately. EOF, RST, and timeouts may be accidental (crash, cable pull, CML link cut), so the player gets a 60 s window to rejoin. See `protocol_blueprint.md` §5.
 
@@ -132,6 +143,18 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 - **Order of checks:** resolve captures first, then five-in-a-row, then capture count.
 - **No draws:** Pente has no draw. As a safety net for the theoretical case where all 361 cells fill with no winner, the player with more captured pairs wins. If captures are tied, P2 wins, since P1 had the first-move advantage (G10).
 
+### 4.1 Round Scoring (added in Sprint 2)
+
+Run once on entry to `GAME_OVER`, for **both** players, using the final board (Points Pente):
+
+| Points | For |
+|---|---|
+| 5 (bonus) | Getting five in a row (`FIVE_IN_A_ROW` only; no bonus for `FIVE_CAPTURES`, `BOARD_FULL`, or forfeits) |
+| 1 each | Pair captured during the game (`captures[player]`) |
+| 1 each | Four-in-a-row of the player's stones on the **final** board: exactly 4 consecutive in one straight line. A run of 5 or more is the winning line and is not also counted as a four |
+
+The round totals are added to the player's `PlayerRecord` in the session leaderboard (keyed by alias), then sent in `SCORE_UPDATE`. Games that end through `CLEANUP` without `GAME_OVER` (D3, D8) are not scored. Algorithm and storage details: [`concurrency_design.md` §6](concurrency_design.md#6-score--leaderboard-synchronization-spec-23).
+
 ---
 
 ## 5. Server Data Model (owned by the FSM)
@@ -141,7 +164,7 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 class Seat:
     player_id: str            # "P1" / "P2"
     alias: str
-    sock: socket.socket | None  # None while disconnected
+    conn_id: int | None       # the Connection bound to this seat; None while disconnected
     session_token: str
     connected: bool
 
@@ -154,7 +177,26 @@ class GameState:
     seats: dict = field(default_factory=dict)   # "P1"/"P2" -> Seat
     last_move: dict | None = None
     paused_player: str | None = None
+    pause_seq: int = 0        # +1 on every D2 pause; checked by the stale-timer guard (D7)
     grace_timer: threading.Timer | None = None
+
+# Added in Sprint 2. Lives on the server object, OUTSIDE GameState,
+# so CLEANUP (which resets GameState) does not erase it.
+@dataclass
+class PlayerRecord:
+    alias: str
+    games_played: int = 0
+    wins: int = 0
+    losses: int = 0
+    points: int = 0
+    captures: int = 0
+    fours: int = 0
+
+# PenteServer fields guarded by the same state_lock:
+#   game: GameState
+#   game_id: int                         # +1 at every GAME_START, used by the stale-timer guard
+#   leaderboard: dict[str, PlayerRecord] # keyed by alias, kept for the life of the server process
+#   connections: dict[int, Connection]
 ```
 
 ---
@@ -173,4 +215,6 @@ class GameState:
 | Player 1 leaves the lobby before Player 2 arrives | L6: seat freed, no game created |
 | Third client connects | L7: `ROOM_FULL` |
 | Wrong token on reconnect | D5: rejected; the paused game keeps waiting |
-| Next round after a game ends | `CLEANUP` → `WAITING_FOR_PLAYERS` |
+| Next round after a game ends | `CLEANUP` → `WAITING_FOR_PLAYERS`; leaderboard kept |
+| Grace timer fires just as the player rejoins | D7 stale-timer guard: the late timer does nothing |
+| Both players send `MOVE` at the same instant | The lock serializes them; the out-of-turn one gets `NOT_YOUR_TURN` (G3) |

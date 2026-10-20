@@ -1,7 +1,7 @@
 # CS 457 Project Statement of Work (SOW) & Protocol Specification Template
 
 **Student Name:** Bode Kaanta  
-**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1)  
+**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1, 2026/10/19 for Sprint 2)  
 **Course:** CS 457 - Computer Networks  
 **Target Server Domain:** `server.kaanta.edu`  
 
@@ -50,6 +50,7 @@
 8. `GAME_OVER` (Server -> Clients): WIN / FORFEIT notification (winner, win reason) with final board and captures.
 9. `RECONNECT` (Client -> Server): Rejoin an in-progress game within the 60-second grace period.
 10. `PLAYER_STATUS` (Server -> Client): Opponent disconnected / reconnected notice.
+11. `SCORE_UPDATE` (Server -> Client(s)): Round points and the session leaderboard (added in Sprint 2).
 
 #### Example JSON Protocol Schema:
 ```json
@@ -74,12 +75,14 @@
 ## 3. Game Behavior & Server Concurrency Architecture (Sprint 2 Deliverable)
 
 ### 3.1 Server Concurrency Strategy
-- **Architecture Choice:** [Multi-Threading (`threading.Thread`) OR Non-blocking I/O multiplexing (`select.select` / `selectors`)]
-- **Synchronization Logic:** Explain how shared game state and client list are thread-safe (e.g. `threading.Lock`) to prevent race conditions during turn processing.
+> Full specifications: [`docs/concurrency_design.md`](docs/concurrency_design.md), [`docs/sequence_diagram.md`](docs/sequence_diagram.md)
+
+- **Architecture Choice:** Multi-threading (`threading.Thread`). The main thread runs the `accept()` loop and starts one daemon handler thread per client socket (cap of 8 connections). A `threading.Timer` thread runs the 60 s reconnect grace period. A blocked `recv()` only parks its own thread, so no client can stall the server.
+- **Synchronization Logic:** One `threading.Lock` (`state_lock`) guards all shared state: the board, turn counter, captures, seats, connection list, `game_id`, and the session leaderboard. Handlers never hold the lock during `recv()`. Each complete message is processed in one critical section (validate → mutate → send), so moves are atomic. Every send to a client happens under the lock, so two threads never write to the same socket at once. A 5 s socket timeout bounds how long a send can hold the lock. Only a socket's own handler thread closes it, and the grace timer re-checks the state before acting (stale-timer guard).
 
 ### 3.2 State & Score Synchronization Across Clients
-- **Turn Enforcement:** Detail how the server validates active player ID before processing moves and broadcasts updated turn notifications to all clients.
-- **Score & Board Synchronization:** Describe how state broadcasts keep client screens synchronized in real time.
+- **Turn Enforcement:** The server identifies the player by the socket a `MOVE` arrived on (not the self-reported `player_id`) and, under the lock, checks it against `active_player = ["P1","P2"][turn_number % 2]` before any change. Out-of-turn or illegal moves get an `ERROR` to the sender only and change nothing. After a legal move, `turn_number` increments and the new `active_player` is broadcast in `STATE_UPDATE`.
+- **Score & Board Synchronization:** The thread that applied a change encodes `STATE_UPDATE` once and sends the same bytes to both players before releasing the lock, so both screens always show the same sequence of states. Live captures ride in every `STATE_UPDATE`. When a game ends, the server scores the round with Points Pente rules (5-point bonus for five in a row, 1 per captured pair, 1 per four-in-a-row still on the final board) and adds the points to a session leaderboard keyed by alias, which survives `CLEANUP`. It then sends `STATE_UPDATE (FINISHED)` → `GAME_OVER` → `SCORE_UPDATE (ROUND_COMPLETE)` to both players in one critical section. Standings are also sent with `SCORE_UPDATE (STANDINGS)` when a player joins.
 
 ---
 
