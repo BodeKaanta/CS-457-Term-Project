@@ -7,6 +7,19 @@
 
 This document defines **how the server runs several client connections at the same time without blocking**, how it keeps the shared game state safe from race conditions, how turns are enforced, and how the board, scores, and leaderboard reach both players. The protocol and FSM from Sprint 1 say *what* happens. This document says *which thread does it, and under which lock*.
 
+## Summary
+
+The server uses **multi-threading**. The main thread only accepts connections, and every client gets its own handler thread. A handler waiting on `recv()` blocks only itself, so one slow or silent player never stalls the server. All shared data (the board, turn, captures, seats, connection list, and leaderboard) is protected by **one `threading.Lock`**, so only one thread can change the game at a time. That rules out two moves being applied at once and makes deadlock from lock ordering impossible. When a move arrives, the receiving thread takes the lock and checks that it is the sender's turn and the move is legal. It updates the board and **sends the same `STATE_UPDATE` to both players before releasing the lock**, so both screens always show the same sequence of states. When a game ends, the server scores the round with Points Pente rules, adds the points to a leaderboard kept in memory for as long as the server runs, and sends `GAME_OVER` and `SCORE_UPDATE` to both players.
+
+| If you want... | Read |
+|---|---|
+| Which threads exist and why | §1 |
+| A connection from `accept()` to close | §2 |
+| The lock, its rules, and the race conditions it prevents | §3, §4 |
+| How broadcasts stay in sync, and turn enforcement | §5 |
+| How scores are stored and sent | §6 |
+| The message flow as a diagram | [`sequence_diagram.md`](sequence_diagram.md) |
+
 ---
 
 ## 1. Concurrency Model: Multi-Threading (Option A)

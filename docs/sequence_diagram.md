@@ -5,9 +5,43 @@
 **Sprint:** 2 (Game Behavior & Server Concurrency Architecture Design)
 **Related docs:** [`concurrency_design.md`](concurrency_design.md) (threads, lock rules, scoring) · [`protocol_blueprint.md`](protocol_blueprint.md) (message schemas) · [`fsm_specification.md`](fsm_specification.md) (transition IDs such as L1, G7, D4)
 
-This diagram follows one complete game through the server's threads. It shows **all 11 message types** in the protocol. Unlike a plain client/server diagram, the server is split into the threads that actually do the work, so you can see **which thread holds `state_lock`** and **which thread sends each broadcast**.
+This file has two diagrams. The **summary** shows the core flow in 12 steps: join, one move (valid or rejected), the broadcast to both players, and the end-of-game score update. The **full diagram** follows one complete game through the server's threads. It shows **all 11 message types** and splits the server into the threads that do the work, so you can see **which thread holds `state_lock`** and **which thread sends each broadcast**.
 
-## How to Read It
+## Summary Diagram
+
+The server is drawn as one box here. To keep it short, some arrows carry more than one message (for example `GAME_START + SCORE_UPDATE + STATE_UPDATE`); the full diagram shows each one separately.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C1 as Client 1 (P1)
+    participant S as Server (thread per client + state_lock)
+    actor C2 as Client 2 (P2)
+
+    C1->>S: CONNECT
+    S-->>C1: LOBBY_WAIT + SCORE_UPDATE (standings)
+    C2->>S: CONNECT
+    S-->>C1: GAME_START + SCORE_UPDATE + STATE_UPDATE (P1's turn)
+    S-->>C2: GAME_START + SCORE_UPDATE + STATE_UPDATE (P1's turn)
+    C1->>S: MOVE (row, col)
+    Note over S: P1's thread takes state_lock<br/>Checks - sender's turn? on the board? cell empty?
+    alt Invalid or out-of-turn move
+        S-->>C1: ERROR (NOT_YOUR_TURN, OUT_OF_BOUNDS, CELL_OCCUPIED...)
+        Note over S: Nothing changes, lock released
+    else Legal move
+        Note over S: Place stone, remove captured pairs,<br/>turn passes to P2
+        S-->>C1: STATE_UPDATE (board, captures, P2's turn)
+        S-->>C2: STATE_UPDATE (same bytes)
+        Note over S: Lock released only after both sends
+    end
+    Note over C1,C2: Turns repeat until someone wins
+    C1->>S: MOVE (completes five in a row)
+    Note over S: Score the round, update the leaderboard
+    S-->>C1: STATE_UPDATE (FINISHED) + GAME_OVER + SCORE_UPDATE
+    S-->>C2: STATE_UPDATE (FINISHED) + GAME_OVER + SCORE_UPDATE
+```
+
+## How to Read the Full Diagram
 
 | Lane | What it is |
 |---|---|
@@ -24,7 +58,7 @@ This diagram follows one complete game through the server's threads. It shows **
 - Labels like **L1**, **G7**, **D4** are row IDs from the transition tables in `fsm_specification.md`.
 - Payloads are abbreviated. The full schemas are in `protocol_blueprint.md` §3.
 
-## Diagram
+## Full Diagram
 
 ```mermaid
 sequenceDiagram
@@ -182,7 +216,9 @@ sequenceDiagram
     end
 ```
 
-## Narrative
+## Narrative (Full Diagram)
+
+Step numbers below refer to the full diagram.
 
 ### Phase 1: Connect and wait in the lobby (steps 1–7)
 
