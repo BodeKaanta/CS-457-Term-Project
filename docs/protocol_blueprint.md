@@ -2,8 +2,8 @@
 
 **Project:** CS 457 Term Project: Networked Pente
 **Author:** Bode Kaanta
-**Sprint:** 1 (Application Protocol & FSM Design)
-**Related docs:** [`fsm_specification.md`](fsm_specification.md) · [`ai_prompts.md`](ai_prompts.md) · [`../sow_template.md`](../sow_template.md)
+**Sprint:** 1 (Application Protocol & FSM Design), updated in Sprint 2 (`SCORE_UPDATE`, scoring, threading notes)
+**Related docs:** [`fsm_specification.md`](fsm_specification.md) · [`concurrency_design.md`](concurrency_design.md) · [`sequence_diagram.md`](sequence_diagram.md) · [`ai_prompts.md`](ai_prompts.md) · [`../sow_template.md`](../sow_template.md)
 
 This document is the single source of truth for every byte exchanged between `client.py` and `server.py`. Any implementation (human- or AI-written) that disagrees with this document is wrong.
 
@@ -120,7 +120,7 @@ def send_msg(sock, msg: dict) -> None:
 
 | Key | Type | Required | Description |
 |---|---|---|---|
-| `msg_type` | string (enum) | yes | One of the 10 types in §3. Case-sensitive, UPPER_SNAKE_CASE. |
+| `msg_type` | string (enum) | yes | One of the 11 types in §3. Case-sensitive, UPPER_SNAKE_CASE. |
 | `player_id` | string \| null | yes | Sender identity. Server-originated messages use `"SERVER"`. Clients use their assigned role `"P1"` / `"P2"`, or `null` before a role has been assigned (`CONNECT`). |
 | `payload` | object | yes | Type-specific body (may be `{}`), defined in §3. |
 | `timestamp` | integer | yes | Unix epoch seconds at send time. Informational only; the server never trusts client clocks for game logic. |
@@ -149,6 +149,7 @@ def send_msg(sock, msg: dict) -> None:
 | 8 | `GAME_OVER` | Server → Both clients | Final result: who won, how (WIN / FORFEIT), and the final state |
 | 9 | `RECONNECT` | Client → Server | Rejoin an in-progress game within the grace period |
 | 10 | `PLAYER_STATUS` | Server → Client | Tell the remaining player that the opponent dropped or rejoined |
+| 11 | `SCORE_UPDATE` | Server → Client(s) | Round points and the session leaderboard (added in Sprint 2) |
 
 ### 3.1 `CONNECT` (Client → Server)
 
@@ -179,6 +180,8 @@ Sent to the first connected player while the room has one seat filled.
 {"msg_type":"LOBBY_WAIT","player_id":"SERVER","payload":{"players_connected":1,"players_needed":2,"message":"Waiting for Player 2..."},"timestamp":1791266400}
 ```
 
+Immediately after `LOBBY_WAIT`, the server sends the same player a `SCORE_UPDATE` (`reason: "STANDINGS"`) so the waiting player can see the leaderboard.
+
 ### 3.3 `GAME_START` (Server → Both clients)
 
 Sent to **each** client individually (fields such as `your_player_id` differ per recipient). Role assignment: **the first player to `CONNECT` becomes `P1` and moves first**; the second becomes `P2`. Also re-sent to a player who successfully `RECONNECT`s, with `resumed: true`.
@@ -199,7 +202,7 @@ Sent to **each** client individually (fields such as `your_player_id` differ per
 {"msg_type":"GAME_START","player_id":"SERVER","payload":{"your_player_id":"P2","your_alias":"Bob","opponent_alias":"Alice","session_token":"3b7e19c0a4f25d88","board_size":19,"first_player":"P1","stones_to_win":5,"captures_to_win":5,"resumed":false},"timestamp":1791266412}
 ```
 
-Immediately after `GAME_START`, the server broadcasts an initial `STATE_UPDATE` (empty board, `turn_number: 0`, `active_player: "P1"`).
+Immediately after `GAME_START`, the server sends both players a `SCORE_UPDATE` (`reason: "STANDINGS"`), then broadcasts an initial `STATE_UPDATE` (empty board, `turn_number: 0`, `active_player: "P1"`).
 
 ### 3.4 `MOVE` (Client → Server)
 
@@ -222,7 +225,7 @@ Server validation order (the first failure wins and produces an `ERROR`, non-fat
 4. `0 ≤ row, col ≤ 18` → else `OUT_OF_BOUNDS`
 5. `board[row][col] == "."` → else `CELL_OCCUPIED`
 
-A valid move is applied, captures are resolved, win conditions are checked, and the result is broadcast as `STATE_UPDATE` (and `GAME_OVER` if the game ended).
+A valid move is applied, captures are resolved, win conditions are checked, and the result is broadcast as `STATE_UPDATE` (and `GAME_OVER` + `SCORE_UPDATE` if the game ended).
 
 ### 3.5 `STATE_UPDATE` (Server → Both clients)
 
@@ -256,7 +259,7 @@ Sent **only** to the offending client. A non-fatal error never changes game stat
 |---|---|---|
 | `MALFORMED_JSON` | no | Frame is not valid UTF-8 JSON or is not a JSON object |
 | `MISSING_FIELD` | no | A required envelope or payload key is absent |
-| `UNKNOWN_MSG_TYPE` | no | `msg_type` is not one of the 10 defined types, or is a server-only type |
+| `UNKNOWN_MSG_TYPE` | no | `msg_type` is not one of the 11 defined types, or is a server-only type |
 | `INVALID_PAYLOAD` | no | A field has the wrong data type |
 | `PLAYER_ID_MISMATCH` | no | `player_id` differs from the role bound to this socket |
 | `NOT_YOUR_TURN` | no | `MOVE` from the non-active player |
@@ -290,7 +293,7 @@ Server handling: an intentional quit is final. There is **no** grace period. If 
 
 ### 3.8 `GAME_OVER` (Server → Both clients)
 
-Final outcome. Sent after the final `STATE_UPDATE` (status `FINISHED`). After `GAME_OVER`, the server closes both connections and returns to the lobby (see FSM `CLEANUP`).
+Final outcome. Sent after the final `STATE_UPDATE` (status `FINISHED`). After `GAME_OVER`, the server sends `SCORE_UPDATE` (`reason: "ROUND_COMPLETE"`), then closes both connections and returns to the lobby (see FSM `CLEANUP`).
 
 | Payload field | Type | Description |
 |---|---|---|
@@ -324,7 +327,7 @@ Sent as the **first** message on a **new** TCP connection by a player whose prev
 {"msg_type":"RECONNECT","player_id":"P2","payload":{"alias":"Bob","session_token":"3b7e19c0a4f25d88","protocol_version":1},"timestamp":1791266490}
 ```
 
-On success the server binds the new socket to the old seat and sends that client `GAME_START` (`resumed: true`, same role and token). It sends the opponent `PLAYER_STATUS` (`RECONNECTED`), then broadcasts `STATE_UPDATE` (`ACTIVE`, same `active_player` as before the drop). On failure it sends `ERROR INVALID_TOKEN` (fatal).
+On success the server binds the new socket to the old seat and sends that client `GAME_START` (`resumed: true`, same role and token) followed by `SCORE_UPDATE` (`reason: "STANDINGS"`). It sends the opponent `PLAYER_STATUS` (`RECONNECTED`), then broadcasts `STATE_UPDATE` (`ACTIVE`, same `active_player` as before the drop). On failure it sends `ERROR INVALID_TOKEN` (fatal).
 
 ### 3.10 `PLAYER_STATUS` (Server → Client)
 
@@ -341,6 +344,41 @@ Sent to the **remaining** player when the opponent's connection drops unexpected
 {"msg_type":"PLAYER_STATUS","player_id":"SERVER","payload":{"subject_player":"P2","status":"DISCONNECTED","grace_seconds_remaining":60,"message":"Bob lost connection. Waiting up to 60s for them to rejoin..."},"timestamp":1791266475}
 ```
 
+### 3.11 `SCORE_UPDATE` (Server → Client)
+
+*Added in Sprint 2.* Carries the points from the round that just ended and the server's **session leaderboard**. The leaderboard is kept in server memory for as long as the server process runs and is keyed by alias (see [`concurrency_design.md` §6](concurrency_design.md#6-score--leaderboard-synchronization-spec-23)). The server computes every number; clients only print it.
+
+**Scoring (Points Pente):** the player who gets five in a row gets a **5**-point bonus (no bonus for a win by captures, a full board, or a forfeit). Each player also gets **1** point per captured pair and **1** point per four-in-a-row of their stones on the final board (exactly 4 in a straight line; a run of 5 or more is not counted as a four). Abandoned games (both players gone) are not scored.
+
+| Payload field | Type | Description |
+|---|---|---|
+| `reason` | string (enum) | `ROUND_COMPLETE` (a game just ended) or `STANDINGS` (sent on joining, so the player sees the current table) |
+| `round` | object \| null | Results of the game that just ended; `null` when `reason` is `STANDINGS`. Fields below |
+| `round.game_id` | integer | Server-side game counter (1, 2, 3, ...) |
+| `round.winner` | string | `"P1"` or `"P2"` |
+| `round.win_reason` | string | Same value as `GAME_OVER.win_reason` |
+| `round.points` | object | `{"P1": RoundScore, "P2": RoundScore}`, each `{"alias": str, "five_bonus": int, "capture_points": int, "four_points": int, "total": int}` |
+| `leaderboard` | array | Up to 10 entries, ranked by `points` (high→low), then `wins` (high→low), then `alias` (A→Z). Each entry: `{"rank": int, "alias": str, "games_played": int, "wins": int, "losses": int, "points": int}`. May be empty (`[]`) before any game has finished |
+
+```json
+{"msg_type":"SCORE_UPDATE","player_id":"SERVER","payload":{"reason":"ROUND_COMPLETE","round":{"game_id":3,"winner":"P1","win_reason":"FIVE_IN_A_ROW","points":{"P1":{"alias":"Alice","five_bonus":5,"capture_points":2,"four_points":1,"total":8},"P2":{"alias":"Bob","five_bonus":0,"capture_points":1,"four_points":1,"total":2}}},"leaderboard":[{"rank":1,"alias":"Alice","games_played":3,"wins":2,"losses":1,"points":19},{"rank":2,"alias":"Bob","games_played":3,"wins":1,"losses":2,"points":12}]},"timestamp":1791266552}
+```
+
+```json
+{"msg_type":"SCORE_UPDATE","player_id":"SERVER","payload":{"reason":"STANDINGS","round":null,"leaderboard":[{"rank":1,"alias":"Alice","games_played":3,"wins":2,"losses":1,"points":19},{"rank":2,"alias":"Bob","games_played":3,"wins":1,"losses":2,"points":12}]},"timestamp":1791266600}
+```
+
+When it is sent:
+
+| Moment | `reason` | To |
+|---|---|---|
+| After `LOBBY_WAIT` | `STANDINGS` | The waiting player (P1) |
+| After both `GAME_START`s, before the first `STATE_UPDATE` | `STANDINGS` | Both players |
+| After `GAME_START (resumed: true)` | `STANDINGS` | The rejoining player |
+| After `GAME_OVER` | `ROUND_COMPLETE` | Every still-connected player |
+
+A full 10-entry `SCORE_UPDATE` is about 1.3 KB, well below the 8192-byte frame limit.
+
 ---
 
 ## 4. Typical Message Sequences
@@ -350,15 +388,18 @@ Sent to the **remaining** player when the opponent's connection drops unexpected
 ```text
 Alice → S : CONNECT {alias:"Alice"}
 S → Alice : LOBBY_WAIT
+S → Alice : SCORE_UPDATE {reason:"STANDINGS"}
 Bob   → S : CONNECT {alias:"Bob"}
 S → Alice : GAME_START {your_player_id:"P1", ...}
 S → Bob   : GAME_START {your_player_id:"P2", ...}
+S → both  : SCORE_UPDATE {reason:"STANDINGS"}
 S → both  : STATE_UPDATE {turn_number:0, active_player:"P1"}
 Alice → S : MOVE {9,9}         → S → both : STATE_UPDATE {active_player:"P2"}
 Bob   → S : MOVE {9,9}         → S → Bob  : ERROR CELL_OCCUPIED (Bob still active)
 Bob   → S : MOVE {8,8}         → S → both : STATE_UPDATE {active_player:"P1"}
 ...
-Alice → S : MOVE (5th in row)  → S → both : STATE_UPDATE {FINISHED}, GAME_OVER {WIN, FIVE_IN_A_ROW}
+Alice → S : MOVE (5th in row)  → S → both : STATE_UPDATE {FINISHED}, GAME_OVER {WIN, FIVE_IN_A_ROW},
+                                            SCORE_UPDATE {reason:"ROUND_COMPLETE"}
 S closes both sockets → back to lobby
 ```
 
@@ -370,9 +411,10 @@ S → Alice : PLAYER_STATUS {P2, DISCONNECTED, 60}
 S → Alice : STATE_UPDATE {game_status:"PAUSED_RECONNECT", active_player:null}
 Bob (new socket) → S : RECONNECT {alias:"Bob", session_token:"3b7e..."}
 S → Bob   : GAME_START {resumed:true}
+S → Bob   : SCORE_UPDATE {reason:"STANDINGS"}
 S → Alice : PLAYER_STATUS {P2, RECONNECTED}
 S → both  : STATE_UPDATE {game_status:"ACTIVE", active_player:<same as before>}
-(If 60 s elapse first → S → Alice : GAME_OVER {FORFEIT, OPPONENT_TIMEOUT})
+(If 60 s elapse first → S → Alice : STATE_UPDATE {FINISHED}, GAME_OVER {FORFEIT, OPPONENT_TIMEOUT}, SCORE_UPDATE {ROUND_COMPLETE})
 ```
 
 ---
@@ -388,6 +430,8 @@ The server distinguishes **how** a connection ended, because the game reacts dif
 | **Abrupt termination** (`kill -9`, power loss, CML link cut) | TCP RST, or nothing at all | `ConnectionResetError` / `ConnectionAbortedError` on `recv()`, `BrokenPipeError` on `sendall()`, or keepalive timeout (`TimeoutError` / `OSError`) | Treated as an **unexpected drop** → `PAUSED_RECONNECT` (60 s grace) |
 
 ### 5.1 The TCP EOF (0-byte) Rule
+
+> **Sprint 2 note:** the final threaded version of this handler (5 s `settimeout()` wake-ups, handshake timeout, and socket-ownership rules) is in [`concurrency_design.md` §2.5](concurrency_design.md#25-active-servicing-handler-thread). The EOF and exception rules below are unchanged.
 
 When the peer closes cleanly, `recv()` **does not raise**. It returns `b""`. Every receive loop must check this, or it spins forever at 100 % CPU because `recv()` keeps returning `b""` immediately.
 
@@ -425,7 +469,7 @@ def client_handler(sock, conn_id):
 | `BrokenPipeError` | `sendall()` to a peer that is already gone | **every** send (`send_msg` wrapper) |
 | `TimeoutError` / `OSError` (`ETIMEDOUT`) | Keepalive probes unanswered (silent link loss) | receive loop |
 
-Sends to one player must never crash the handling of the other. The `broadcast()` helper wraps each `send_msg` individually. A send failure marks that connection as lost and triggers `handle_connection_lost()` for it, then continues with the next recipient.
+Sends to one player must never crash the handling of the other. The `broadcast()` helper wraps each `send_msg` individually. A send failure marks that connection as lost (`dead`) and `shutdown()`s its socket, then continues with the next recipient. That connection's own handler thread then wakes up and runs `handle_connection_lost()` (see [`concurrency_design.md` §5.3](concurrency_design.md#53-send-failures-during-a-broadcast)).
 
 ### 5.3 Detecting Silent Link Loss (cut CML link)
 
@@ -436,7 +480,10 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)   # start probing after 10 s idle
 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)   # probe every 5 s
 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # 3 missed probes → error
+sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 25000)  # Sprint 2: unacked data → error after 25 s
 ```
+
+Keepalive only probes a connection that is **idle**. If the link is cut right after the server sends data (for example a `STATE_UPDATE`), that data sits unacknowledged and Linux keeps retransmitting for about 15 minutes. `TCP_USER_TIMEOUT` (added in Sprint 2) makes the connection fail after 25 s of unacknowledged data instead, so both cases are detected in about the same time.
 
 (Linux options. The CML nodes run Linux. On the Windows dev machine these constants may be missing and are skipped with `hasattr()`.)
 
@@ -444,13 +491,14 @@ sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # 3 missed probes
 
 Whatever the cause, `handle_connection_lost(conn_id, cause)` does the following:
 
-1. Marks the seat as disconnected and closes the socket (idempotent: safe to call twice).
+1. Marks the seat as disconnected (idempotent: safe to call twice). The socket is closed by its own handler thread in its `finally` block.
 2. Feeds the matching event to the FSM (`DISCONNECT_MSG`, `CONN_LOST`), which decides between forfeit, pause, or lobby cleanup (see `fsm_specification.md`).
 3. Notifies the remaining player (`PLAYER_STATUS` or `GAME_OVER`) if they are still connected.
-4. When the game finishes, `CLEANUP` cancels the grace timer, discards session tokens, resets the board, closes all sockets, and returns to `WAITING_FOR_PLAYERS`. Nothing from the old game leaks into the next one.
+4. When the game finishes, `CLEANUP` cancels the grace timer, discards session tokens, resets the board, shuts down all player sockets, and returns to `WAITING_FOR_PLAYERS`. Nothing from the old game leaks into the next one. The session leaderboard is the one structure that is deliberately kept.
 
 ### 5.5 Client-Side Behavior
 
 - On user quit: send `DISCONNECT`, then `sock.close()`.
 - On EOF / `ConnectionResetError` with no `GAME_OVER` received: print "Connection lost", then retry `RECONNECT` (using the saved `.pente_session.json`) every 5 s, for up to 60 s.
-- On `GAME_OVER`: delete `.pente_session.json`, print the result, and close.
+- On `GAME_OVER`: delete `.pente_session.json` and print the result, then keep reading until the `SCORE_UPDATE` arrives (or EOF), print the round points and leaderboard, and close.
+- On `SCORE_UPDATE` (`STANDINGS`): print the leaderboard; it never changes the board or turn.
