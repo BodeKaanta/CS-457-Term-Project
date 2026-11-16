@@ -1,7 +1,7 @@
 # CS 457 Project Statement of Work (SOW) & Protocol Specification Template
 
 **Student Name:** Bode Kaanta  
-**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1, 2026/10/19 for Sprint 2, 2026/11/15 for Sprint 3)  
+**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1, 2026/10/19 for Sprint 2, 2026/11/15 for Sprint 3, 2026/11/16 for Sprint 4)  
 **Course:** CS 457 - Computer Networks  
 **Target Server Domain:** `server.kaanta.edu`  
 
@@ -112,20 +112,21 @@
 
 ## 5. CML Multi-Subnet Topology & Wireshark Deployment Plan (Sprint 4 & 5 Deliverable)
 
-> For now you can use the topology below. We may update this when we get to defining subnets.
+> **Updated for Sprint 4:** the course moved to a single-router topology. The earlier plan (two routers, R1 and R2, joined by a `10.0.0.0/30` backbone, with DNS on R2) is replaced by one router, R1, that is the gateway, DHCP server, and DNS server for all three subnets. Full details and verification: [`sprint_4_network_report.md`](sprint_4_network_report.md); router configuration: [`cml/R1.cfg`](cml/R1.cfg).
 
 ### 5.1 Subnet & Router Design
-- **Subnet A (Client 1):** `192.168.10.0/24` (Interface `Gi0/1` on Router R1)
-- **Subnet B (Client 2):** `192.168.11.0/24` (Interface `Gi0/2` on Router R1)
-- **Subnet C (Game Server):** `192.168.20.0/24` (Interface `Gi0/1` on Router R2)
-- **Router Backbone:** `10.0.0.0/30` (Interface `Gi0/0` on R1 <-> `Gi0/0` on R2)
+- **Router:** one Cisco IOSv router, R1 (CML node `bk-R1`). All three subnets are directly connected, so no static routes or routing protocol are needed.
+- **Subnet A (Client 1, `bk-Client1`):** `192.168.10.0/24`, gateway R1 `Gi0/1` = `192.168.10.1`
+- **Subnet B (Client 2, `bk-Client2`):** `192.168.11.0/24`, gateway R1 `Gi0/2` = `192.168.11.1`
+- **Subnet C (Game Server, `bk-Server`):** `192.168.20.0/24`, gateway R1 `Gi0/3` = `192.168.20.1`. The server is static `192.168.20.100/24` with default route via `192.168.20.1`.
 
 ### 5.2 DHCP Pools & DNS Configuration Plan
-- **Router R1 DHCP Pool 1 (`CLIENT1_POOL`):** Leases `192.168.10.10` - `192.168.10.50`, gateway `192.168.10.1`, DNS `10.0.0.2`.
-- **Router R1 DHCP Pool 2 (`CLIENT2_POOL`):** Leases `192.168.11.10` - `192.168.11.50`, gateway `192.168.11.1`, DNS `10.0.0.2`.
-- **Router R2 Authoritative DNS:** Configured with `ip dns server` and static host mapping `server.[yourlastname].edu` -> `192.168.20.100`.
+- **R1 DHCP Pool 1 (`CLIENT1_POOL`):** network `192.168.10.0/24` (`.1` excluded), default gateway `192.168.10.1`, DNS `192.168.10.1`.
+- **R1 DHCP Pool 2 (`CLIENT2_POOL`):** network `192.168.11.0/24` (`.1` excluded), default gateway `192.168.11.1`, DNS `192.168.11.1`.
+- **R1 Authoritative DNS:** `ip domain lookup`, `ip dns server`, and the static host mapping `ip host server.kaanta.edu 192.168.20.100`.
 
 ### 5.3 Deployment Strategy & Wireshark Trace Capture
-- **CML Deployment Strategy:** Deploy `server.py` onto Subnet C node (`192.168.20.100`) behind Router R2, and `client.py` onto Subnet A and Subnet B nodes behind Router R1.
-- **Cisco Infrastructure Configuration:** Router R1 DHCP pools (`CLIENT1_POOL`, `CLIENT2_POOL`) and Router R2 authoritative DNS (`ip host server.[lastname].edu 192.168.20.100`).
-- **Wireshark Trace Capture Plan:** Capture DHCP DORA exchange (`dhcp_negotiation.pcap`) and DNS query/response resolution (`dns_lookup.pcap`).
+- **CML Deployment Strategy (Sprint 4):** build the lab from [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml) (or by hand per [`cml/LAB_GUIDE.md`](cml/LAB_GUIDE.md)). Verify interfaces, routes, and DHCP bindings on R1; leases, ping, and `nslookup` on both clients; then export the lab as `sprint_4_topology.yaml`.
+- **Game deployment (Sprint 5):** `server.py` runs on `bk-Server` (`192.168.20.100`) and `client.py` on `bk-Client1` and `bk-Client2`, connecting with `-i server.kaanta.edu -p 5457`.
+- **Cisco Infrastructure Configuration:** R1 interfaces, DHCP pools (`CLIENT1_POOL`, `CLIENT2_POOL`), and authoritative DNS (`ip host server.kaanta.edu 192.168.20.100`); see [`cml/R1.cfg`](cml/R1.cfg).
+- **Wireshark Trace Capture Plan:** the Sprint 4 requirement is the DNS query/response capture `sprint_4_dns_lookup.pcap`, taken on the R1-Client 1 link during `nslookup server.kaanta.edu`, and annotated in the report with `tools/dns_pcap_report.py`. (The DHCP capture was dropped from the Sprint 4 requirements.)

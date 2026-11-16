@@ -1,0 +1,262 @@
+# Sprint 4 Network Verification Report: CML 1-Router Topology
+
+**Project:** CS 457 Term Project: Networked Pente
+**Author:** Bode Kaanta
+**Sprint:** 4 (CML 1-Router Network Topology & Infrastructure Deployment)
+**Server name:** `server.kaanta.edu` → `192.168.20.100`
+**Files:** [`sprint_4_topology.yaml`](sprint_4_topology.yaml) (CML export) · [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) (DNS capture) · [`cml/R1.cfg`](cml/R1.cfg) (router configuration)
+
+<!-- TODO before submitting: replace every "TODO" block below with real output or a screenshot, then delete this comment. Step-by-step instructions: cml/LAB_GUIDE.md -->
+
+## Summary
+
+One Cisco IOSv router, **R1** (CML node `bk-R1`), connects three subnets: Client 1, Client 2, and the game server. R1 is each subnet's default gateway. It leases addresses to the two clients from two DHCP pools, and it answers DNS queries for `server.kaanta.edu` from its own host table. The server has the static address 192.168.20.100 with R1 as its default gateway. Both clients reach the server across the router, and the DNS capture shows `server.kaanta.edu` resolving to 192.168.20.100. That lookup is what the Pente client (`client.py -i server.kaanta.edu`) depends on in Sprint 5.
+
+| Acceptance criterion | Evidence |
+|---|---|
+| Single router R1 connects Client 1 (192.168.10.0/24), Client 2 (192.168.11.0/24), and the server (192.168.20.0/24) | §1 topology, §3 `show ip interface brief` and `show ip route` |
+| R1 issues IP addresses, default gateways, and DNS server IPs through separate DHCP pools | §2.3 configuration, §3 `show ip dhcp binding`, §5 client leases |
+| Server has static 192.168.20.100/24 with default gateway 192.168.20.1 | §4 |
+| Both clients ping the server across subnets with no packet loss | §6 |
+| DNS resolution of `server.kaanta.edu` returns 192.168.20.100 (pcap and screenshots) | §7, §8 |
+
+---
+
+## 1. Topology
+
+**TODO (screenshot):** CML canvas with the custom node names → save as `docs/sprint_4/topology.png`
+
+![CML topology](docs/sprint_4/topology.png)
+
+| Node | Role | Interface | IPv4 address | How it is assigned |
+|---|---|---|---|---|
+| `bk-R1` | Router, gateway, DHCP and DNS server | Gi0/1 | 192.168.10.1/24 | Static (Subnet A gateway) |
+| | | Gi0/2 | 192.168.11.1/24 | Static (Subnet B gateway) |
+| | | Gi0/3 | 192.168.20.1/24 | Static (Subnet C gateway) |
+| `bk-Client1` | Pente client 1 | eth0 ↔ R1 Gi0/1 | 192.168.10.x/24 | DHCP, pool `CLIENT1_POOL` |
+| `bk-Client2` | Pente client 2 | eth0 ↔ R1 Gi0/2 | 192.168.11.x/24 | DHCP, pool `CLIENT2_POOL` |
+| `bk-Server` | Pente game server | eth0 ↔ R1 Gi0/3 | 192.168.20.100/24 | Static, gateway 192.168.20.1 |
+
+```mermaid
+graph TD
+    C1["bk-Client1<br>192.168.10.x (DHCP)"] <-->|"Subnet A 192.168.10.0/24<br>Gi0/1 192.168.10.1"| R1["bk-R1 (IOSv)<br>gateway, DHCP, DNS"]
+    C2["bk-Client2<br>192.168.11.x (DHCP)"] <-->|"Subnet B 192.168.11.0/24<br>Gi0/2 192.168.11.1"| R1
+    R1 <-->|"Subnet C 192.168.20.0/24<br>Gi0/3 192.168.20.1"| S["bk-Server<br>192.168.20.100 (static)"]
+```
+
+Because all three subnets are directly connected to R1, R1 routes between them using only its connected routes. No static routes or routing protocol are needed.
+
+> **Change from the earlier plan:** the SOW (Sprints 0–3) planned two routers, with DNS on R2 behind a 10.0.0.0/30 backbone. Sprint 4 uses one router, so R1 is now the gateway, DHCP server, **and** DNS server, and each client's DNS server is its own gateway address. The SOW (§5) and the protocol blueprint have been updated to match.
+
+## 2. Router R1 configuration
+
+The full configuration is in [`cml/R1.cfg`](cml/R1.cfg). The parts that matter:
+
+### 2.1 Interfaces and routing
+
+```text
+hostname R1
+ip routing
+interface GigabitEthernet0/1
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/2
+ ip address 192.168.11.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/3
+ ip address 192.168.20.1 255.255.255.0
+ no shutdown
+```
+
+### 2.2 DNS: R1 is authoritative for the game server's name
+
+```text
+ip domain lookup
+ip dns server
+ip host server.kaanta.edu 192.168.20.100
+```
+
+`ip dns server` makes R1 answer DNS queries on UDP/TCP port 53 on all of its interfaces. `ip host` adds a static A record to R1's host table. Because R1 owns that record, its answer is marked **authoritative** (the AA flag in §8).
+
+### 2.3 DHCP: one pool per client subnet
+
+```text
+ip dhcp excluded-address 192.168.10.1
+ip dhcp excluded-address 192.168.11.1
+ip dhcp pool CLIENT1_POOL
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.10.1
+ip dhcp pool CLIENT2_POOL
+ network 192.168.11.0 255.255.255.0
+ default-router 192.168.11.1
+ dns-server 192.168.11.1
+```
+
+R1 chooses the pool from the interface the DHCP Discover arrives on. A Discover on Gi0/1 (192.168.10.1/24) matches `CLIENT1_POOL`'s `network` statement; one on Gi0/2 matches `CLIENT2_POOL`. `default-router` is DHCP option 3 (the client's default gateway). `dns-server` is option 6, which ends up as `nameserver` in the client's `/etc/resolv.conf`. Each pool's gateway is excluded so it is never leased to a client.
+
+## 3. Router verification
+
+### `show ip interface brief`
+
+**TODO (paste):** Gi0/1, Gi0/2, Gi0/3 should show their addresses and **up / up**.
+
+```text
+TODO
+```
+
+### `show ip route`
+
+**TODO (paste):** three connected (**C**) routes, for 192.168.10.0/24, 192.168.11.0/24 and 192.168.20.0/24, plus their local (**L**) /32 routes.
+
+```text
+TODO
+```
+
+### `show ip dhcp binding`
+
+**TODO (paste):** run this after both clients have their leases (§5). One binding should be on Gi0/1 (192.168.10.x) and one on Gi0/2 (192.168.11.x).
+
+```text
+TODO
+```
+
+### `show hosts`
+
+**TODO (paste):** `server.kaanta.edu` → 192.168.20.100.
+
+```text
+TODO
+```
+
+## 4. Game server: static address and default gateway
+
+Commands on `bk-Server`:
+
+```sh
+sudo ip addr add 192.168.20.100/24 dev eth0
+sudo ip link set eth0 up
+sudo ip route add default via 192.168.20.1
+```
+
+The default route is what lets the server answer the clients. The client subnets are not 192.168.20.0/24, so without it the server would receive a ping or a TCP SYN from 192.168.10.x but have no route to send the reply back ("Network is unreachable").
+
+**TODO (paste):** `ip addr show eth0` and `ip route` from `bk-Server`.
+
+```text
+TODO
+```
+
+## 5. Client DHCP leases
+
+Commands on each client:
+
+```sh
+sudo ip link set eth0 up
+sudo udhcpc -i eth0
+ip addr show eth0
+ip route
+cat /etc/resolv.conf
+```
+
+These show the three things DHCP delivered: the leased **address**, the **default route** via the client's gateway, and R1 as the **DNS server**.
+
+### bk-Client1 (Subnet A)
+
+**TODO (paste):** the output of the commands above.
+
+```text
+TODO
+```
+
+### bk-Client2 (Subnet B)
+
+**TODO (paste):** the output of the commands above.
+
+```text
+TODO
+```
+
+## 6. Connectivity: clients ping the game server
+
+`ping -c 4 192.168.20.100` from each client. The packets cross R1 from Subnet A or B into Subnet C, and the replies come back through the server's default gateway.
+
+### bk-Client1 → bk-Server
+
+**TODO (paste):** should end with `0% packet loss`.
+
+```text
+TODO
+```
+
+### bk-Client2 → bk-Server
+
+**TODO (paste):** should end with `0% packet loss`.
+
+```text
+TODO
+```
+
+## 7. DNS resolution from the clients
+
+`nslookup server.kaanta.edu` on each client. The client sends the query to the DNS server it learned from DHCP (its own gateway on R1), and R1 answers from its host table.
+
+### bk-Client1
+
+**TODO (paste):** `Server: 192.168.10.1` … `Name: server.kaanta.edu` / `Address: 192.168.20.100`.
+
+```text
+TODO
+```
+
+### bk-Client2
+
+**TODO (paste):** `Server: 192.168.11.1` … `Address: 192.168.20.100`.
+
+```text
+TODO
+```
+
+## 8. Wireshark DNS capture (`sprint_4_dns_lookup.pcap`)
+
+**How it was captured:** a CML packet capture on the link between `bk-R1` Gi0/1 and `bk-Client1` eth0, running while `nslookup server.kaanta.edu` ran on `bk-Client1`.
+
+**TODO (screenshot):** Wireshark with display filter `dns`, the response packet selected, and *Answers* expanded → save as `docs/sprint_4/wireshark_dns.png`
+
+![Wireshark DNS query and response](docs/sprint_4/wireshark_dns.png)
+
+### Annotated exchange
+
+**TODO (paste):** output of `python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap`. It lists every DNS packet in the capture and annotates the query and the response (frame numbers, ports, transaction ID, flags, and the answer), and should end with `PASS`.
+
+```text
+TODO
+```
+
+### What the two key packets show
+
+| | DNS Standard Query (client → R1) | DNS Standard Query Response (R1 → client) |
+|---|---|---|
+| Transport | UDP, from a random high source port to destination port **53** | UDP, source port **53** back to the client's port |
+| Addresses | Client 1's DHCP address → 192.168.10.1 (the DNS server from DHCP option 6) | 192.168.10.1 → Client 1 |
+| Transaction ID | Random 16-bit ID chosen by the client | **Same ID**, which is how the client matches the reply to its query |
+| Flags | QR = 0 (query), RD = 1 (recursion desired) | QR = 1 (response), **AA = 1** (authoritative, from R1's `ip host` table), RCODE = 0 (NOERROR) |
+| Question | `server.kaanta.edu`, type **A**, class IN | The question is repeated |
+| Answer | — | **`server.kaanta.edu` A `192.168.20.100`** |
+
+`nslookup` may also send an **AAAA** (IPv6) query for the same name, and some versions also send a **PTR** query for the DNS server's own address. R1 has no IPv6 or reverse record, so those replies carry no address. That is expected and does not affect the A-record answer.
+
+## 9. How this supports the game (Sprint 5)
+
+The Pente client resolves the server with `socket.gethostbyname("server.kaanta.edu")`. On a CML client node, that lookup reads `/etc/resolv.conf` (written by DHCP, §5), sends the query shown in §8 to R1, and connects to the returned 192.168.20.100 on TCP port 5457. R1 routes the traffic (§6). The server node's static address and default gateway (§4) let it accept those connections from both client subnets. If DNS breaks, the client prints its error ("Unable to resolve DNS hostname … check your Cisco router DNS configuration") and exits cleanly, as shown in the Sprint 3 log.
+
+## 10. Files in this submission
+
+| File | What it is |
+|---|---|
+| [`sprint_4_topology.yaml`](sprint_4_topology.yaml) | CML lab exported after the configurations were saved and extracted |
+| [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) | Raw capture of the DNS query and response |
+| [`sprint_4_network_report.md`](sprint_4_network_report.md) | This report |
+| [`cml/R1.cfg`](cml/R1.cfg) | R1's configuration, commented |
+| [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml) | Ready-to-import lab used to build the topology (generated by `tools/build_cml_lab.py`) |
+| [`tools/dns_pcap_report.py`](tools/dns_pcap_report.py) | Reads the capture and produces the annotated table in §8 |

@@ -12,7 +12,7 @@ This log was recorded with the real `server.py` and two real `client.py` process
 |---|---|
 | Client parses `-h`, `-i`, `-p`; server parses `-h`, `-p` and binds `0.0.0.0` | Section 1 (help output) and the first server log line (`listening on 0.0.0.0:5457`) |
 | Client resolves the server by DNS hostname, no hard-coded IP | `[INFO] Resolved localhost -> ...` at the top of each client console |
-| Client catches `socket.gaierror` and fails gracefully | Section 1: `server.kaanta.edu` does not resolve on this machine yet (Router R2's DNS comes in Sprint 4). The client prints the error and exits with status 1, with no traceback |
+| Client catches `socket.gaierror` and fails gracefully | Section 1: `server.kaanta.edu` does not resolve on this machine yet (DNS for that name is set up on router R1 in the Sprint 4 CML lab). The client prints the error and exits with status 1, with no traceback |
 | Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11) |
 | At least 3 turns of gameplay | 11 moves were played: a capture at move 5, an occupied cell and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
 | CLI board, turn status, and score summaries | Section 3: the board with row/column numbers, `>>> YOUR TURN` / `Waiting for Bob (P2) to move...`, live captures on every turn, then round points and the session leaderboard |

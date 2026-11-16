@@ -31,7 +31,7 @@ python3 server.py -p 5457       # start the server on port 5457
 
 ```bash
 python3 client.py -h
-python3 client.py -i server.kaanta.edu -p 5457 -a Alice   # in the CML lab (DNS from Router R2)
+python3 client.py -i server.kaanta.edu -p 5457 -a Alice   # in the CML lab (DNS from Router R1)
 python3 client.py -i localhost -p 5457 -a Bob             # local testing on one machine
 ```
 
@@ -52,6 +52,7 @@ python3 client.py -i localhost -p 5457 -a Bob             # local testing on one
 | `pente/game.py` | Pente rules (captures, five in a row) and Points Pente scoring |
 | `pente/fsm.py` | `PenteServer`: the game state machine, guarded by one lock |
 | `tests/` | Unit and end-to-end tests |
+| `cml/` | Sprint 4 CML lab: router config, importable lab, lab guide |
 | `tools/demo_game.py` | Plays a scripted game with real server and client processes and saves the console logs |
 | `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log, Sprint 3 execution log |
 
@@ -62,6 +63,15 @@ python3 -m unittest discover -s tests -t .
 ```
 
 The suite covers framing (including TCP fragmentation and coalescing), message validation, every Pente rule, the FSM transition rows (lobby, gameplay, disconnect, reconnect, grace timeout, and concurrent moves from two threads), and full games over real sockets on localhost. `pytest` also runs these tests if it is installed.
+
+## Sprint 4: CML network
+
+The game runs on a Cisco Modeling Labs topology: one IOSv router, R1, connects the two client subnets and the server subnet. R1 leases client addresses by DHCP and answers DNS for `server.kaanta.edu`.
+
+- [`cml/LAB_GUIDE.md`](cml/LAB_GUIDE.md): step-by-step build, verification, capture, and export
+- [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml): ready-to-import CML lab (regenerate with `python tools/build_cml_lab.py` after editing [`cml/R1.cfg`](cml/R1.cfg))
+- [`sprint_4_network_report.md`](sprint_4_network_report.md): verification report
+- `python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap`: checks and annotates the DNS capture
 
 ## Documentation
 
