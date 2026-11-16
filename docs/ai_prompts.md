@@ -2,8 +2,8 @@
 
 **Project:** CS 457 Term Project: Networked Pente
 **Author:** Bode Kaanta
-**Sprint:** 1 (updated in Sprint 2)
-**AI tools:** Claude (primary), GitHub Copilot (inline completion only)
+**Sprint:** 1 (updated in Sprint 2 and Sprint 3)
+**AI tools:** Claude (primary; Claude Code for Sprint 3 implementation), GitHub Copilot (inline completion only)
 **Related docs:** [`protocol_blueprint.md`](protocol_blueprint.md) · [`fsm_specification.md`](fsm_specification.md) · [`concurrency_design.md`](concurrency_design.md) · [`sequence_diagram.md`](sequence_diagram.md)
 
 The goal is to make AI tools **implement my protocol**, not invent one. Generic "write me a socket game server" prompts produce boilerplate that ignores framing, uses ad-hoc message formats, and crashes on disconnects. That is exactly what this course says will fail evaluation. Every code-generation request therefore follows the rules below.
@@ -229,6 +229,21 @@ Host and port come from argv (default server.kaanta.edu 5457).
 - [ ] Manual test: play two games in a row with the same aliases and confirm the leaderboard totals carry over.
 - [ ] Rejected AI suggestions and the reason are recorded in the log below.
 
+### 4.1 How the Plan Was Applied in Sprint 3
+
+The code was written with Claude Code, an agent that can read the repository and run the code itself. Instead of pasting one §3 prompt per chat, I gave it the Sprint 3 assignment page and the repository, so it read the four spec documents directly. It still worked one layer at a time (framing → messages → game → FSM → server/client), and it ran the tests after each layer. These things differ from the §3 prompts, on purpose:
+
+| Planned (§3) | Built | Why |
+|---|---|---|
+| Packages `protocol/`, `game/`, `server/`, `client/` | One package `pente/` (`framing.py`, `messages.py`, `game.py`, `fsm.py`) plus `server.py` and `client.py` at the repository root | Sprint 3 requires `server.py` and `client.py` you can run directly. A `server/` package next to `server.py` would clash on `import server` |
+| `pytest` tests | Standard-library `unittest` (pytest still runs them) | Nothing to install on the lab nodes or the grader's machine |
+| Host and port default to `server.kaanta.edu 5457` | `-i` and `-p` are required flags | The Sprint 3 CLI spec marks both as required |
+| `socket.getaddrinfo()` | `socket.gethostbyname()`, with `socket.gaierror` caught | Named in the Sprint 3 spec (§2.2) |
+| Client draws stones as `1` / `2` | `X` / `O`, with the last move in brackets | Easier to read on a console. The wire format is still `"1"` / `"2"` (Blueprint §2) |
+| `.pente_session.json` | `.pente_session_<alias>.json` | Two clients started from the same folder (local testing) would otherwise overwrite each other's token |
+
+Verification gate (§4) results: all closed sets matched the spec; no `recv()` runs under `state_lock` and every send to a registered socket runs under it; only the handler thread `close()`s its socket; 81 tests pass. Runs with real client processes covered a full game (with a capture, an occupied cell, an off-board move, and bad input), a killed client relaunched within 60 s, a cut connection that the client rejoined on its own, and a `quit` forfeit. Out-of-turn moves, the 60 s grace timeout, and back-to-back games with the leaderboard carrying over are covered by the automated tests.
+
 ---
 
 ## 5. Prompt Log
@@ -241,3 +256,6 @@ Host and port come from argv (default server.kaanta.edu 5457).
 | 2026-10-19 | Claude | Uploaded the Sprint 2 assignment page and repo link. Chose **multi-threading** (Option A) because it is common in real-world servers. Asked for help with the Mermaid diagram and asked whether scores are stored per game instance and whether the broadcast happens after the active player's move | `docs/concurrency_design.md`, `docs/sequence_diagram.md` | Claude explained the thread layout and corrected one point: the server listens to **both** clients at all times (one thread each), and turn enforcement happens after receiving. It also pointed out that `CLEANUP` wipes `GameState`, so "round scores / leaderboard" would not survive a game. Gave options for score scope, score message, broadcast strategy, and diagram detail |
 | 2026-10-19 | Claude | My decisions: session leaderboard kept in server memory (keyed by alias); a new `SCORE_UPDATE` message; send broadcasts **while holding the lock**; diagram shows the handler threads and the lock. Scoring follows normal Pente points: 5 for a win, 1 per captured pair, 1 per four-in-a-row | all docs | Claude wrote both Sprint 2 docs, added `SCORE_UPDATE` (§3.11) to the blueprint and round scoring (§4.1) to the FSM, and compiled the diagram with the Mermaid CLI (light and dark) to check for syntax errors. Sending under the lock **replaces** the Sprint 1 rule "no socket I/O while holding the lock" in §3.4 and §4 of this file; the 5 s socket timeout bounds how long a send can hold the lock |
 | 2026-10-19 | Claude | Claude pointed out that the official rules give the 5 points only for five in a row. I checked the Pente rulebook (bonus for five in a row; 1 per capture; 1 per four still on the board) and asked to match it. Also asked why the Sprint 1 "no socket I/O under the lock" rule was reversed | scoring in all docs | Changed: 5-point bonus only for `FIVE_IN_A_ROW` (renamed `win_bonus` to `five_bonus`); no bonus for wins by captures, a full board, or forfeits. Claude explained the trade-off: the Sprint 1 rule keeps the lock short, but needs extra machinery to keep broadcasts in order and stop two threads writing to one socket at once |
+| 2026-11-15 | Claude Code | Gave Claude the Sprint 3 assignment page and the repository with my Sprint 1-2 docs. Asked it to get familiar with everything, then implement Sprint 3 in Python on a new branch | `server.py`, `client.py`, `pente/`, `tests/` | Claude read the four spec docs and built the code layer by layer with tests (framing, messages, game rules, FSM, then sockets). It logs the FSM row ID on every transition so the server log can be checked against the spec. Deviations from the §3 prompts and the reasons are in §4.1 |
+| 2026-11-15 | Claude Code | (Claude's own testing) Ran a scripted game with real server and client processes, a killed and relaunched client, and a connection cut through a TCP proxy | `client.py` | Found and fixed: (1) on exit, the client crashed with `Fatal Python error ... could not acquire lock for <stdin>` because the input thread was still blocked in `input()`; it now flushes its output and exits with `os._exit()`; (2) a test that sent P2's message from P1's socket (the server correctly answered `PLAYER_ID_MISMATCH`); (3) during a pause, the client said "not your turn" instead of "game paused" |
+| 2026-11-15 | Claude Code | Claude flagged that my SOW said moves are typed chess-style (`K10`), while the blueprint and §3.5 say `row col` | `sow_template.md` | Went with `row col` (0-18), which matches the numbers printed around the board and the wire format. Updated the SOW line |

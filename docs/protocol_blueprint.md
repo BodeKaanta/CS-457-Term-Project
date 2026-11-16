@@ -103,12 +103,12 @@ def send_msg(sock, msg: dict) -> None:
 
 ### 1.4 Server Endpoint & Port Selection
 
-**Why port 5457?** It is an easy-to-remember tie to the course: **5** + **457** (CS 457). It sits in the *registered* port range (1024–49151), so the server does not need root/administrator rights, which ports below 1024 would require. It is not assigned to any common service, so it won't collide with anything on the lab nodes. Both the server and client read it from a constant (`PORT = 5457`) and accept a command-line override in case it is ever taken.
+**Why port 5457?** It is an easy-to-remember tie to the course: **5** + **457** (CS 457). It sits in the *registered* port range (1024–49151), so the server does not need root/administrator rights, which ports below 1024 would require. It is not assigned to any common service, so it won't collide with anything on the lab nodes. *Sprint 3:* as the Sprint 3 CLI spec requires, both programs take the port with a required `-p` flag (`server.py -p 5457`, `client.py -i server.kaanta.edu -p 5457`), so a different port can be used if 5457 is ever taken.
 
 **How the endpoint is established:**
 
 1. **Server (passive open):** `server.py` creates a TCP socket, sets `SO_REUSEADDR` (so a restart doesn't fail with "address already in use"), then calls `bind(("0.0.0.0", 5457))` to accept connections on every interface of the server node. It then calls `listen()` and loops on `accept()`. Each `accept()` returns a **new** socket dedicated to one client; the listening socket keeps waiting for others.
-2. **Name resolution:** the client only knows the name `server.kaanta.edu`. It calls `socket.getaddrinfo("server.kaanta.edu", 5457)`, which asks the DNS server. In the CML topology (Sprint 4–5) that is Router R2, which answers `192.168.20.100`. During local development, `127.0.0.1` is passed on the command line instead.
+2. **Name resolution:** the client only knows the name `server.kaanta.edu`. It calls `socket.gethostbyname("server.kaanta.edu")` (the call named in the Sprint 3 spec), which asks the DNS server. In the CML topology (Sprint 4–5) that is Router R2, which answers `192.168.20.100`. During local development, `-i localhost` is passed instead. If resolution fails (`socket.gaierror`), the client prints an error that points at the router DNS configuration and exits with status 1.
 3. **Client (active open):** the client calls `connect(("192.168.20.100", 5457))`. The OS picks a random ephemeral source port and performs the TCP 3-way handshake (SYN → SYN-ACK → ACK).
 4. **Connection identity:** each connection is the unique 4-tuple *(client IP, client port, server IP, 5457)*. The server ties a player's seat to that connection. Its first application message must be `CONNECT` or `RECONNECT`.
 
@@ -191,7 +191,7 @@ Sent to **each** client individually (fields such as `your_player_id` differ per
 | `your_player_id` | string | `"P1"` or `"P2"`, the role the client must use in all later `player_id` fields |
 | `your_alias` | string | Echo of the client's alias |
 | `opponent_alias` | string | Opponent's alias |
-| `session_token` | string | 16-hex-char random token. Required to `RECONNECT`. The client saves it to `.pente_session.json` so it survives a client crash |
+| `session_token` | string | 16-hex-char random token. Required to `RECONNECT`. The client saves it to `.pente_session_<alias>.json` so it survives a client crash (one file per alias since Sprint 3, so two clients started from the same folder never write the same file) |
 | `board_size` | integer | `19` |
 | `first_player` | string | `"P1"` |
 | `stones_to_win` | integer | `5` (five or more in a row) |
@@ -499,6 +499,8 @@ Whatever the cause, `handle_connection_lost(conn_id, cause)` does the following:
 ### 5.5 Client-Side Behavior
 
 - On user quit: send `DISCONNECT`, then `sock.close()`.
-- On EOF / `ConnectionResetError` with no `GAME_OVER` received: print "Connection lost", then retry `RECONNECT` (using the saved `.pente_session.json`) every 5 s, for up to 60 s.
-- On `GAME_OVER`: delete `.pente_session.json` and print the result, then keep reading until the `SCORE_UPDATE` arrives (or EOF), print the round points and leaderboard, and close.
+- On EOF / `ConnectionResetError` with no `GAME_OVER` received: print "Connection lost", then retry `RECONNECT` (using the saved `.pente_session_<alias>.json`) every 5 s, for up to 60 s.
+- On start-up, if a session file exists for the alias and server, send `RECONNECT` instead of `CONNECT`. If the server answers `INVALID_TOKEN` (that game is over), delete the file and join again with `CONNECT`.
+- On Ctrl-C: close the socket **without** `DISCONNECT`, so the server treats it as a drop and holds the seat for 60 s. Typing `quit` sends `DISCONNECT` (a forfeit).
+- On `GAME_OVER`: delete the session file and print the result, then keep reading until the `SCORE_UPDATE` arrives (or EOF), print the round points and leaderboard, and close.
 - On `SCORE_UPDATE` (`STANDINGS`): print the leaderboard; it never changes the board or turn.
