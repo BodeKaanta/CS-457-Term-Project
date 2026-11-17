@@ -68,6 +68,8 @@ interface GigabitEthernet0/3
  no shutdown
 ```
 
+> **Reading the exported configuration:** R1's config in [`sprint_4_topology.yaml`](sprint_4_topology.yaml) was extracted from the running router, so it is in IOS's own `show running-config` format. IOS omits commands that are at their default value. `ip routing` is on by default, so the extracted config does not list it; IOS would only print `no ip routing` if routing were turned off. `show ip route` in §3, with three connected routes, confirms that R1 is routing. For the same reason `ip domain lookup` and the interfaces' `no shutdown` are not listed, while the unused Gi0/0 does show `shutdown`. IOS also fills in the default SOA timers on `ip dns primary` (`21600 900 7776000 86400`).
+
 ### 2.2 DNS: R1 is authoritative for the game server's name
 
 ```text

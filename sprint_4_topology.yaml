@@ -1,0 +1,358 @@
+annotations: []
+smart_annotations: []
+nodes:
+  - boot_disk_size: null
+    configuration:
+      - name: ios_config.txt
+        content: |-
+          Building configuration...
+
+          Current configuration : 3713 bytes
+          !
+          ! Last configuration change at 22:37:25 UTC Tue Nov 17 2026
+          !
+          version 15.9
+          service timestamps debug datetime msec
+          service timestamps log datetime msec
+          no service password-encryption
+          !
+          hostname R1
+          !
+          boot-start-marker
+          boot-end-marker
+          !
+          !
+          no logging console
+          !
+          no aaa new-model
+          !
+          !
+          !
+          mmi polling-interval 60
+          no mmi auto-configure
+          no mmi pvc
+          mmi snmp-timeout 180
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          ip dhcp excluded-address 192.168.10.1
+          ip dhcp excluded-address 192.168.11.1
+          !
+          ip dhcp pool CLIENT1_POOL
+           network 192.168.10.0 255.255.255.0
+           default-router 192.168.10.1
+           dns-server 192.168.10.1
+          !
+          ip dhcp pool CLIENT2_POOL
+           network 192.168.11.0 255.255.255.0
+           default-router 192.168.11.1
+           dns-server 192.168.11.1
+          !
+          !
+          !
+          ip host server.kaanta.edu 192.168.20.100
+          ip cef
+          no ipv6 cef
+          !
+          multilink bundle-name authenticated
+          !
+          !
+          !
+          !
+          !
+          redundancy
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          !
+          interface GigabitEthernet0/0
+           description unused
+           no ip address
+           shutdown
+           duplex auto
+           speed auto
+           media-type rj45
+          !
+          interface GigabitEthernet0/1
+           description Subnet A gateway - bk-Client1
+           ip address 192.168.10.1 255.255.255.0
+           duplex auto
+           speed auto
+           media-type rj45
+          !
+          interface GigabitEthernet0/2
+           description Subnet B gateway - bk-Client2
+           ip address 192.168.11.1 255.255.255.0
+           duplex auto
+           speed auto
+           media-type rj45
+          !
+          interface GigabitEthernet0/3
+           description Subnet C gateway - bk-Server (game server)
+           ip address 192.168.20.1 255.255.255.0
+           duplex auto
+           speed auto
+           media-type rj45
+          !
+          ip forward-protocol nd
+          !
+          !
+          no ip http server
+          no ip http secure-server
+          ip dns server
+          ip dns primary kaanta.edu soa R1.kaanta.edu admin.kaanta.edu 21600 900 7776000 86400
+          !
+          ipv6 ioam timestamp
+          !
+          !
+          !
+          control-plane
+          !
+          banner exec ^C
+          **************************************************************************
+          * IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+          * education. IOSv is provided as-is and is not supported by Cisco's      *
+          * Technical Advisory Center. Any use or disclosure, in whole or in part, *
+          * of the IOSv Software or Documentation to any third party for any       *
+          * purposes is expressly prohibited except as otherwise authorized by     *
+          * Cisco in writing.                                                      *
+          **************************************************************************^C
+          banner incoming ^C
+          **************************************************************************
+          * IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+          * education. IOSv is provided as-is and is not supported by Cisco's      *
+          * Technical Advisory Center. Any use or disclosure, in whole or in part, *
+          * of the IOSv Software or Documentation to any third party for any       *
+          * purposes is expressly prohibited except as otherwise authorized by     *
+          * Cisco in writing.                                                      *
+          **************************************************************************^C
+          banner login ^C
+          **************************************************************************
+          * IOSv is strictly limited to use for evaluation, demonstration and IOS  *
+          * education. IOSv is provided as-is and is not supported by Cisco's      *
+          * Technical Advisory Center. Any use or disclosure, in whole or in part, *
+          * of the IOSv Software or Documentation to any third party for any       *
+          * purposes is expressly prohibited except as otherwise authorized by     *
+          * Cisco in writing.                                                      *
+          **************************************************************************^C
+          !
+          line con 0
+           exec-timeout 0 0
+           logging synchronous
+           transport preferred none
+          line aux 0
+          line vty 0 4
+           exec-timeout 0 0
+           login
+           transport preferred none
+           transport input none
+          !
+          no scheduler allocate
+          !
+          end
+    cpu_limit: null
+    cpus: null
+    data_volume: null
+    hide_links: false
+    id: n0
+    image_definition: null
+    label: bk-R1
+    node_definition: iosv
+    parameters: {}
+    priority: null
+    pyats:
+      username: null
+      password: null
+      enable_password: null
+    ram: null
+    tags: []
+    x: 0
+    y: 0
+    interfaces:
+      - id: i0
+        label: Loopback0
+        mac_address: null
+        type: loopback
+      - id: i1
+        label: GigabitEthernet0/0
+        mac_address: null
+        type: physical
+        slot: 0
+      - id: i2
+        label: GigabitEthernet0/1
+        mac_address: null
+        type: physical
+        slot: 1
+      - id: i3
+        label: GigabitEthernet0/2
+        mac_address: null
+        type: physical
+        slot: 2
+      - id: i4
+        label: GigabitEthernet0/3
+        mac_address: null
+        type: physical
+        slot: 3
+  - boot_disk_size: null
+    configuration:
+      - name: node.cfg
+        content: |-
+          # CML runs this shell script as root when the Alpine node boots.
+          hostname bk-Client1
+          # Console login
+          USERNAME=cisco
+          PASSWORD=cisco
+          # Bring the link up. The IP address, gateway and DNS server come from R1's
+          # DHCP pool (CLIENT1_POOL): run "sudo udhcpc -i eth0" at the console (Sprint 4 2.3).
+          ip link set eth0 up
+    cpu_limit: null
+    cpus: null
+    data_volume: null
+    hide_links: false
+    id: n1
+    image_definition: null
+    label: bk-Client1
+    node_definition: alpine
+    parameters: {}
+    priority: null
+    pyats:
+      username: null
+      password: null
+      enable_password: null
+    ram: null
+    tags: []
+    x: 80
+    y: -120
+    interfaces:
+      - id: i0
+        label: eth0
+        mac_address: null
+        type: physical
+        slot: 0
+  - boot_disk_size: null
+    configuration:
+      - name: node.cfg
+        content: |-
+          # CML runs this shell script as root when the Alpine node boots.
+          hostname bk-Client2
+          # Console login
+          USERNAME=cisco
+          PASSWORD=cisco
+          # Bring the link up. The IP address, gateway and DNS server come from R1's
+          # DHCP pool (CLIENT2_POOL): run "sudo udhcpc -i eth0" at the console (Sprint 4 2.3).
+          ip link set eth0 up
+    cpu_limit: null
+    cpus: null
+    data_volume: null
+    hide_links: false
+    id: n2
+    image_definition: null
+    label: bk-Client2
+    node_definition: alpine
+    parameters: {}
+    priority: null
+    pyats:
+      username: null
+      password: null
+      enable_password: null
+    ram: null
+    tags: []
+    x: -80
+    y: -120
+    interfaces:
+      - id: i0
+        label: eth0
+        mac_address: null
+        type: physical
+        slot: 0
+  - boot_disk_size: null
+    configuration:
+      - name: node.cfg
+        content: |-
+          # CML runs this shell script as root when the Alpine node boots.
+          hostname bk-Server
+          # Console login
+          USERNAME=cisco
+          PASSWORD=cisco
+          # Static address and default gateway for the game server (Sprint 4 2.2).
+          # Without the default route the server could not answer the other subnets.
+          ip link set eth0 up
+          ip addr add 192.168.20.100/24 dev eth0
+          ip route add default via 192.168.20.1
+    cpu_limit: null
+    cpus: null
+    data_volume: null
+    hide_links: false
+    id: n3
+    image_definition: null
+    label: bk-Server
+    node_definition: alpine
+    parameters: {}
+    priority: null
+    pyats:
+      username: null
+      password: null
+      enable_password: null
+    ram: null
+    tags: []
+    x: 0
+    y: 160
+    interfaces:
+      - id: i0
+        label: eth0
+        mac_address: null
+        type: physical
+        slot: 0
+links:
+  - id: l0
+    n1: n0
+    n2: n1
+    i1: i2
+    i2: i0
+    conditioning: {}
+    label: bk-R1-GigabitEthernet0/1<->bk-Client1-eth0
+  - id: l1
+    n1: n0
+    n2: n2
+    i1: i3
+    i2: i0
+    conditioning: {}
+    label: bk-R1-GigabitEthernet0/2<->bk-Client2-eth0
+  - id: l2
+    n1: n0
+    n2: n3
+    i1: i4
+    i2: i0
+    conditioning: {}
+    label: bk-R1-GigabitEthernet0/3<->bk-Server-eth0
+lab:
+  description: Sprint 4 - one Cisco IOSv router (R1) serving three subnets with DHCP
+    and authoritative DNS for server.kaanta.edu
+  notes: |-
+    Subnet A 192.168.10.0/24: bk-Client1 (DHCP CLIENT1_POOL), gateway and DNS 192.168.10.1
+    Subnet B 192.168.11.0/24: bk-Client2 (DHCP CLIENT2_POOL), gateway and DNS 192.168.11.1
+    Subnet C 192.168.20.0/24: bk-Server static 192.168.20.100, gateway 192.168.20.1
+    DNS on R1: server.kaanta.edu -> 192.168.20.100
+    Console login for the Alpine nodes: cisco / cisco
+  title: CS 457 Pente - Sprint 4 one-router topology
+  node_staging:
+    enabled: false
+    start_remaining: true
+    abort_on_failure: false
+  version: 0.3.1
