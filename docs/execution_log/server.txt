@@ -1,56 +1,56 @@
-21:44:13 [MainThread    ] INFO    Pente server listening on 0.0.0.0:5457 (Ctrl-C to stop)
-21:44:13 [MainThread    ] INFO    FSM INIT -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [server listening]
-21:44:13 [MainThread    ] INFO    Accepted conn-1 127.0.0.1:55411
-21:44:13 [MainThread    ] INFO    conn-1 127.0.0.1:55411 registered (1 open)
-21:44:13 [conn-1        ] INFO    FSM WAITING_FOR_PLAYERS/LOBBY_EMPTY -> WAITING_FOR_PLAYERS/ONE_PLAYER [L1 Alice seated as P1 (conn-1 127.0.0.1:55411)]
-21:44:13 [MainThread    ] INFO    Accepted conn-2 127.0.0.1:55412
-21:44:13 [MainThread    ] INFO    conn-2 127.0.0.1:55412 registered (2 open)
-21:44:13 [conn-2        ] INFO    FSM WAITING_FOR_PLAYERS/ONE_PLAYER -> GAME_START [L3 Bob seated as P2 (conn-2 127.0.0.1:55412)]
-21:44:13 [conn-2        ] INFO    Game 1: Alice (P1) vs Bob (P2)
-21:44:13 [conn-2        ] INFO    FSM GAME_START -> PLAYER_TURN [G1 P1 moves first]
-21:44:13 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (9,9)]
-21:44:13 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:13 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-21:44:14 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (9,10)]
-21:44:14 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:14 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-21:44:14 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (7,7)]
-21:44:14 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:14 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-21:44:15 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (9,11)]
-21:44:15 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:15 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-21:44:15 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (9,12)]
-21:44:15 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 1 pair(s) captured]
-21:44:15 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-21:44:15 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (9,9)]
-21:44:15 [conn-2        ] INFO    ERROR CELL_OCCUPIED -> conn-2 127.0.0.1:55412: (9,9) already has a stone.
-21:44:15 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G6 cell occupied, P2 keeps the turn]
-21:44:16 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (0,0)]
-21:44:16 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:16 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-21:44:17 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (8,8)]
-21:44:17 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:17 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-21:44:17 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (19,5)]
-21:44:17 [conn-2        ] INFO    ERROR OUT_OF_BOUNDS -> conn-2 127.0.0.1:55412: (19,5) is off the board; use 0-18.
-21:44:17 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G5 out of bounds, P2 keeps the turn]
-21:44:17 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (0,1)]
-21:44:17 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:17 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-21:44:18 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (6,6)]
-21:44:18 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:18 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-21:44:18 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (0,2)]
-21:44:18 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:18 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-21:44:19 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE (5,5)]
-21:44:19 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-21:44:19 [conn-1        ] INFO    FSM CHECK_WIN -> GAME_OVER [G8 P1 wins: WIN FIVE_IN_A_ROW]
-21:44:19 [conn-1        ] INFO    Round 1 points: P1 Alice=6, P2 Bob=0
-21:44:19 [conn-1        ] INFO    FSM GAME_OVER -> CLEANUP [results sent]
-21:44:19 [conn-1        ] INFO    FSM CLEANUP -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [reset for the next game]
-21:44:19 [conn-1        ] INFO    conn-1 127.0.0.1:55411 handler exiting; the server closed it [X1]
-21:44:19 [conn-1        ] INFO    conn-1 127.0.0.1:55411 closed (1 open)
-21:44:19 [conn-2        ] INFO    conn-2 127.0.0.1:55412 handler exiting; the server closed it [X1]
-21:44:19 [conn-2        ] INFO    conn-2 127.0.0.1:55412 closed (0 open)
+23:00:22 [MainThread    ] INFO    Pente server listening on 0.0.0.0:5457 (Ctrl-C to stop)
+23:00:22 [MainThread    ] INFO    FSM INIT -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [server listening]
+23:00:22 [MainThread    ] INFO    Accepted conn-1 127.0.0.1:63689
+23:00:22 [MainThread    ] INFO    conn-1 127.0.0.1:63689 registered (1 open)
+23:00:22 [conn-1        ] INFO    FSM WAITING_FOR_PLAYERS/LOBBY_EMPTY -> WAITING_FOR_PLAYERS/ONE_PLAYER [L1 Alice seated as P1 (conn-1 127.0.0.1:63689)]
+23:00:22 [MainThread    ] INFO    Accepted conn-2 127.0.0.1:63690
+23:00:22 [MainThread    ] INFO    conn-2 127.0.0.1:63690 registered (2 open)
+23:00:22 [conn-2        ] INFO    FSM WAITING_FOR_PLAYERS/ONE_PLAYER -> GAME_START [L3 Bob seated as P2 (conn-2 127.0.0.1:63690)]
+23:00:22 [conn-2        ] INFO    Game 1: Alice (P1) vs Bob (P2)
+23:00:22 [conn-2        ] INFO    FSM GAME_START -> PLAYER_TURN [G1 P1 moves first]
+23:00:23 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE J10 (row 9, col 9)]
+23:00:23 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:23 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:00:23 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE K10 (row 9, col 10)]
+23:00:23 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:23 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:00:23 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE H12 (row 7, col 7)]
+23:00:23 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:23 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:00:24 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE L10 (row 9, col 11)]
+23:00:24 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:24 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:00:24 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE M10 (row 9, col 12)]
+23:00:24 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 1 pair(s) captured]
+23:00:24 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:00:25 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE J10 (row 9, col 9)]
+23:00:25 [conn-2        ] INFO    ERROR CELL_OCCUPIED -> conn-2 127.0.0.1:63690: J10 already has a stone.
+23:00:25 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G6 cell occupied, P2 keeps the turn]
+23:00:25 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE A19 (row 0, col 0)]
+23:00:25 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:25 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:00:26 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE I11 (row 8, col 8)]
+23:00:26 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:26 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:00:26 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (row 14, col 19)]
+23:00:26 [conn-2        ] INFO    ERROR OUT_OF_BOUNDS -> conn-2 127.0.0.1:63690: That point is off the board. Columns are A-S and rows are 1-19.
+23:00:26 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G5 out of bounds, P2 keeps the turn]
+23:00:27 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE B19 (row 0, col 1)]
+23:00:27 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:27 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:00:27 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE G13 (row 6, col 6)]
+23:00:27 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:27 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:00:27 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE C19 (row 0, col 2)]
+23:00:27 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:27 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:00:28 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE F14 (row 5, col 5)]
+23:00:28 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:00:28 [conn-1        ] INFO    FSM CHECK_WIN -> GAME_OVER [G8 P1 wins: WIN FIVE_IN_A_ROW]
+23:00:28 [conn-1        ] INFO    Round 1 points: P1 Alice=6, P2 Bob=0
+23:00:28 [conn-1        ] INFO    FSM GAME_OVER -> CLEANUP [results sent]
+23:00:28 [conn-1        ] INFO    FSM CLEANUP -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [reset for the next game]
+23:00:28 [conn-1        ] INFO    conn-1 127.0.0.1:63689 handler exiting; the server closed it [X1]
+23:00:28 [conn-1        ] INFO    conn-1 127.0.0.1:63689 closed (1 open)
+23:00:28 [conn-2        ] INFO    conn-2 127.0.0.1:63690 handler exiting; the server closed it [X1]
+23:00:28 [conn-2        ] INFO    conn-2 127.0.0.1:63690 closed (0 open)

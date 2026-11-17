@@ -4,7 +4,8 @@ FSM spec §4 and §4.1. No sockets and no threading here, so every rule can be
 unit tested on its own. The FSM calls these functions while holding its lock.
 
 Board cells are "." (empty), "1" (P1 stone) or "2" (P2 stone).
-Coordinates are (row, col), both 0-18, row 0 at the top.
+Coordinates are (row, col), both 0-18, row 0 at the top. Players type and
+see moves in chess-style notation instead (to_notation / from_notation).
 """
 
 from dataclasses import asdict, dataclass
@@ -30,6 +31,31 @@ def opponent(player_id: str) -> str:
 
 def in_bounds(row: int, col: int) -> bool:
     return 0 <= row < SIZE and 0 <= col < SIZE
+
+
+# Chess-style notation for people: a column letter A-S (left to right) then a
+# row number 1-19 (bottom to top), like an (x, y) point. "J10" is the center.
+# The wire protocol keeps 0-based (row, col) with row 0 at the top.
+COLUMNS = "ABCDEFGHIJKLMNOPQRS"
+
+
+def to_notation(row: int, col: int) -> str:
+    """(9, 9) -> "J10", (0, 0) -> "A19", (18, 18) -> "S1"."""
+    if not in_bounds(row, col):
+        return f"(row {row}, col {col})"
+    return f"{COLUMNS[col]}{SIZE - row}"
+
+
+def from_notation(text: str) -> tuple[int, int] | None:
+    """ "J10", "j10" or "J 10" -> (row, col); None if it is not letter + number.
+
+    Letters past S and numbers outside 1-19 still convert, to coordinates off
+    the board, so the server's bounds check (OUT_OF_BOUNDS) decides them.
+    """
+    t = text.strip().upper().replace(" ", "")
+    if len(t) < 2 or len(t) > 3 or not ("A" <= t[0] <= "Z") or not t[1:].isdigit():
+        return None
+    return SIZE - int(t[1:]), ord(t[0]) - ord("A")
 
 
 class Board:

@@ -122,5 +122,21 @@ class ScoringTests(unittest.TestCase):
             self.assertEqual(scores["P1"].total, 5, reason)
 
 
+class NotationTests(unittest.TestCase):
+    def test_round_trip_every_point(self):
+        from pente.game import SIZE, from_notation, to_notation
+        for r in range(SIZE):
+            for c in range(SIZE):
+                self.assertEqual(from_notation(to_notation(r, c)), (r, c))
+
+    def test_examples(self):
+        from pente.game import to_notation
+        self.assertEqual(to_notation(9, 9), "J10")     # center
+        self.assertEqual(to_notation(0, 0), "A19")     # top-left
+        self.assertEqual(to_notation(18, 0), "A1")     # bottom-left, like chess a1
+        self.assertEqual(to_notation(18, 18), "S1")
+        self.assertEqual(to_notation(19, 5), "(row 19, col 5)")  # off the board
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -324,17 +324,21 @@ class PenteServer:
                 return
         row, col = payload["row"], payload["col"]
 
-        self._set_state_locked(EVALUATE_MOVE, f"G2 {seat_id} MOVE ({row},{col})")
+        where = f"(row {row}, col {col})"
+        if game.in_bounds(row, col):
+            where = f"{game.to_notation(row, col)} {where}"
+        self._set_state_locked(EVALUATE_MOVE, f"G2 {seat_id} MOVE {where}")
         # 4. Bounds (G5).
         if not game.in_bounds(row, col):
             self._send_error_locked(conn, "OUT_OF_BOUNDS",
-                                    f"({row},{col}) is off the board; use 0-18.", m.MOVE)
+                                    "That point is off the board. Columns are A-S and "
+                                    "rows are 1-19.", m.MOVE)
             self._set_state_locked(PLAYER_TURN, f"G5 out of bounds, {seat_id} keeps the turn")
             return
         # 5. Occupancy (G6).
         if not g.board.is_empty(row, col):
             self._send_error_locked(conn, "CELL_OCCUPIED",
-                                    f"({row},{col}) already has a stone.", m.MOVE)
+                                    f"{game.to_notation(row, col)} already has a stone.", m.MOVE)
             self._set_state_locked(PLAYER_TURN, f"G6 cell occupied, {seat_id} keeps the turn")
             return
 
