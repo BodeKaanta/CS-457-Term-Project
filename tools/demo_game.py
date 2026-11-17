@@ -16,6 +16,7 @@ does not resolve on this machine (server.kaanta.edu until Sprint 4's DNS).
 """
 
 import argparse
+import os
 import subprocess
 import sys
 import threading
@@ -23,6 +24,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# The board uses box-drawing characters, so the children write UTF-8 and the
+# script reads UTF-8, whatever the Windows code page is.
+CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 OUT_DIR = ROOT / "docs" / "execution_log"
 PROMPT = ">>> YOUR TURN"
 
@@ -48,7 +52,7 @@ class Console:
         self.timeline = timeline
         self.lock = lock
         self.proc = subprocess.Popen(
-            [sys.executable, "-u", *args], cwd=ROOT, text=True,
+            [sys.executable, "-u", *args], cwd=ROOT, text=True, encoding="utf-8", env=CHILD_ENV,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.thread = threading.Thread(target=self._pump, daemon=True)
         self.thread.start()
@@ -81,8 +85,8 @@ class Console:
 
 def run_command(args: list[str]) -> str:
     """Run a short command and return its console output with the command line."""
-    result = subprocess.run([sys.executable, *args], cwd=ROOT, text=True,
-                            capture_output=True, timeout=60)
+    result = subprocess.run([sys.executable, *args], cwd=ROOT, text=True, encoding="utf-8",
+                            env=CHILD_ENV, capture_output=True, timeout=60)
     shown = "python3 " + " ".join(args)
     return f"$ {shown}\n{result.stdout}{result.stderr}(exit status {result.returncode})\n"
 
