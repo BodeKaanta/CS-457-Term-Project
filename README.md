@@ -57,7 +57,6 @@ The board is drawn with grid lines like a real Pente board, with a heavy cross o
 | `pente/game.py` | Pente rules (captures, five in a row) and Points Pente scoring |
 | `pente/fsm.py` | `PenteServer`: the game state machine, guarded by one lock |
 | `tests/` | Unit and end-to-end tests |
-| `cml/` | Sprint 4 CML lab: router config, importable lab, lab guide |
 | `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log |
 
 ## Tests
@@ -72,9 +71,9 @@ The suite covers framing (including TCP fragmentation and coalescing), message v
 
 The game runs on a Cisco Modeling Labs topology: one IOSv router, R1, connects the two client subnets and the server subnet. R1 leases client addresses by DHCP and answers DNS for `server.kaanta.edu`.
 
-- [`cml/LAB_GUIDE.md`](cml/LAB_GUIDE.md): step-by-step build, verification, capture, and export
-- [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml): ready-to-import CML lab (regenerate with `python tools/build_cml_lab.py` after editing [`cml/R1.cfg`](cml/R1.cfg))
+- [`sprint_4_topology.yaml`](sprint_4_topology.yaml): the CML lab export (import it into CML to rebuild the topology)
 - [`sprint_4_network_report.md`](sprint_4_network_report.md): verification report
+- [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap): annotated DNS capture
 - `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`: checks the raw CML capture, prints an annotated summary for the report, and writes the deliverable capture with a Wireshark comment on every DNS packet
 
 ## Documentation

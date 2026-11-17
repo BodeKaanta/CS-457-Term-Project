@@ -112,7 +112,7 @@
 
 ## 5. CML Multi-Subnet Topology & Wireshark Deployment Plan (Sprint 4 & 5 Deliverable)
 
-> **Updated for Sprint 4:** the course moved to a single-router topology. The earlier plan (two routers, R1 and R2, joined by a `10.0.0.0/30` backbone, with DNS on R2) is replaced by one router, R1, that is the gateway, DHCP server, and DNS server for all three subnets. Full details and verification: [`sprint_4_network_report.md`](sprint_4_network_report.md); router configuration: [`cml/R1.cfg`](cml/R1.cfg).
+> **Updated for Sprint 4:** the course moved to a single-router topology. The earlier plan (two routers, R1 and R2, joined by a `10.0.0.0/30` backbone, with DNS on R2) is replaced by one router, R1, that is the gateway, DHCP server, and DNS server for all three subnets. Full details and verification: [`sprint_4_network_report.md`](sprint_4_network_report.md); the lab, with R1's configuration, is exported in [`sprint_4_topology.yaml`](sprint_4_topology.yaml).
 
 ### 5.1 Subnet & Router Design
 - **Router:** one Cisco IOSv router, R1 (CML node `bk-R1`). All three subnets are directly connected, so no static routes or routing protocol are needed.
@@ -126,7 +126,7 @@
 - **R1 Authoritative DNS:** `ip domain lookup`, `ip dns server`, and the static host mapping `ip host server.kaanta.edu 192.168.20.100`.
 
 ### 5.3 Deployment Strategy & Wireshark Trace Capture
-- **CML Deployment Strategy (Sprint 4):** build the lab from [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml) (or by hand per [`cml/LAB_GUIDE.md`](cml/LAB_GUIDE.md)). Verify interfaces, routes, and DHCP bindings on R1; leases, ping, and `nslookup` on both clients; then export the lab as `sprint_4_topology.yaml`.
+- **CML Deployment Strategy (Sprint 4):** build the lab in CML (it can be rebuilt by importing [`sprint_4_topology.yaml`](sprint_4_topology.yaml)). Verify interfaces, routes, and DHCP bindings on R1; leases, ping, and `nslookup` on both clients; then export the lab as `sprint_4_topology.yaml`.
 - **Game deployment (Sprint 5):** `server.py` runs on `bk-Server` (`192.168.20.100`) and `client.py` on `bk-Client1` and `bk-Client2`, connecting with `-i server.kaanta.edu -p 5457`.
-- **Cisco Infrastructure Configuration:** R1 interfaces, DHCP pools (`CLIENT1_POOL`, `CLIENT2_POOL`), and authoritative DNS (`ip host server.kaanta.edu 192.168.20.100`); see [`cml/R1.cfg`](cml/R1.cfg).
+- **Cisco Infrastructure Configuration:** R1 interfaces, DHCP pools (`CLIENT1_POOL`, `CLIENT2_POOL`), and authoritative DNS (`ip dns server`, `ip dns primary kaanta.edu`, `ip host server.kaanta.edu 192.168.20.100`); see report §2.
 - **Wireshark Trace Capture Plan:** the Sprint 4 requirement is the DNS query/response capture `sprint_4_dns_lookup.pcap`, taken on the R1-Client 1 link during `nslookup server.kaanta.edu`, with a Wireshark comment on every DNS packet (written by `tools/dns_pcap_report.py --annotate`) and an annotated summary in the report. (The DHCP capture was dropped from the Sprint 4 requirements.)
