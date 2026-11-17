@@ -27,7 +27,7 @@ stateDiagram-v2
 
     PLAYER_TURN --> PLAYER_TURN : G3/G4 bad message, ERROR
     PLAYER_TURN --> EVALUATE_MOVE : G2 MOVE
-    EVALUATE_MOVE --> PLAYER_TURN : G5/G6 illegal move, ERROR
+    EVALUATE_MOVE --> PLAYER_TURN : G5/G6/G12 illegal move, ERROR
     EVALUATE_MOVE --> CHECK_WIN : G7 legal move
     CHECK_WIN --> PLAYER_TURN : G11 no win, next turn
     CHECK_WIN --> GAME_OVER : G8-G10 winner found
@@ -90,6 +90,7 @@ Each arrow is labeled with its row ID from the transition tables in §3 (e.g. **
 | G4 | `PLAYER_TURN` | malformed frame / unknown type / missing field / bad types / `player_id` mismatch | — | `ERROR MALFORMED_JSON` / `UNKNOWN_MSG_TYPE` / `MISSING_FIELD` / `INVALID_PAYLOAD` / `PLAYER_ID_MISMATCH` to sender | `PLAYER_TURN` |
 | G5 | `EVALUATE_MOVE` | — | row/col outside 0–18 | `ERROR OUT_OF_BOUNDS`; same player keeps turn | `PLAYER_TURN` |
 | G6 | `EVALUATE_MOVE` | — | cell occupied | `ERROR CELL_OCCUPIED`; same player keeps turn | `PLAYER_TURN` |
+| G12 | `EVALUATE_MOVE` | — | breaks the tournament rule (§4 *Opening*): P1's first stone not on the center, or P1's second stone fewer than 3 points from the center. Checked after G6. *Added in Sprint 3; numbered G12 so G7–G11 keep their IDs* | `ERROR TOURNAMENT_RULE`; same player keeps turn | `PLAYER_TURN` |
 | G7 | `EVALUATE_MOVE` | — | legal | Place stone; remove captured pairs; increment `captures[player]` | `CHECK_WIN` |
 | G8 | `CHECK_WIN` | — | ≥5 in a row through the new stone | result `WIN`, reason `FIVE_IN_A_ROW` | `GAME_OVER` |
 | G9 | `CHECK_WIN` | — | `captures[player] ≥ 5` | result `WIN`, reason `FIVE_CAPTURES` | `GAME_OVER` |
@@ -133,7 +134,8 @@ Applies in **every** state, including `LOBBY_EMPTY` and a new game that started 
 
 - **Board:** 19×19 grid. Each cell is `"."` (empty), `"1"` (P1 stone) or `"2"` (P2 stone).
 - **Turn order:** `active_player = "P1" if turn_number % 2 == 0 else "P2"`. P1 always moves first.
-- **Placement:** one stone per turn on any empty intersection.
+- **Placement:** one stone per turn on any empty intersection, except for P1's first two stones (next item).
+- **Opening (tournament rule, added in Sprint 3):** P1's first stone (turn 0) must go on the center point `(9, 9)` (`J10`). P1's second stone (turn 2) must be **3 or more points** from the center, counting diagonal steps as one: `max(|row − 9|, |col − 9|) ≥ 3`. That is on or outside the box drawn on the client's board from `G7` to `M13`. P2 is never restricted, and the rule ends after turn 2. A violation is rejected with `TOURNAMENT_RULE` (G12). This blunts the first player's advantage.
 - **Capture:** after a stone is placed at `(row, col)`, the server looks outward in each of the 8 directions. If the **next two** cells in that direction hold **opponent** stones and the **third** cell holds the **mover's own** stone (pattern `X O O X`), the two opponent stones are removed and the mover's capture count goes up by 1.
   - *Example:* P1 places at `(9, 10)`. Looking right, `(0, +1)`: `(9, 11)` = `2`, `(9, 12)` = `2`, `(9, 13)` = `1`. The P2 stones at `(9, 11)` and `(9, 12)` are captured.
   - Only exactly **two** stones are captured, never one or three.
@@ -206,7 +208,7 @@ class PlayerRecord:
 | Edge case | Handled by |
 |---|---|
 | Out-of-turn move | G3: `ERROR NOT_YOUR_TURN`; state unchanged |
-| Invalid coordinates / occupied cell | G5, G6: `ERROR`; same player retries |
+| Invalid coordinates / occupied cell / tournament rule | G5, G6, G12: `ERROR`; same player retries |
 | Malformed JSON / wrong types / unknown `msg_type` | G4: `ERROR`; receive loop keeps running |
 | Client spoofs the other player's `player_id` | G4: `PLAYER_ID_MISMATCH` (identity comes from the socket) |
 | Graceful quit mid-game | D1: immediate forfeit |

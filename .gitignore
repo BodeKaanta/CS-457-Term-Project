@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Pente client rejoin files (one per alias)
+.pente_session_*.json

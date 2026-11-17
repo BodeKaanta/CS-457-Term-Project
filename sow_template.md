@@ -1,7 +1,7 @@
 # CS 457 Project Statement of Work (SOW) & Protocol Specification Template
 
 **Student Name:** Bode Kaanta  
-**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1, 2026/10/19 for Sprint 2)  
+**Date:** 2026/09/21 (updated 2026/10/05 for Sprint 1, 2026/10/19 for Sprint 2, 2026/11/15 for Sprint 3)  
 **Course:** CS 457 - Computer Networks  
 **Target Server Domain:** `server.kaanta.edu`  
 
@@ -43,9 +43,9 @@
 1. `CONNECT` (Client -> Server): Request to join the game room with an alias.
 2. `LOBBY_WAIT` (Server -> Client): Notification that the server is waiting for Player 2.
 3. `GAME_START` (Server -> Clients): Game initiated (or resumed); assigns roles P1/P2 and a reconnect session token.
-4. `MOVE` (Client -> Server): Place a stone. The player types a chess-style label like `K10` (columns A–S, rows 1–19, row 1 at the bottom); the client converts it to integer `row`, `col` (0-18) before sending.
+4. `MOVE` (Client -> Server): Place a stone. The player types the move chess-style, a column letter `A`-`S` then a row number `1`-`19` with row 1 at the bottom (e.g. `J10` for the center), matching the letters and numbers printed around the board. The client converts it and sends integer `row`, `col` (0-18, row 0 at the top), so the wire format does not depend on how moves are typed.
 5. `STATE_UPDATE` (Server -> Clients): Broadcast board, captured pairs, turn number, active player, and game status.
-6. `ERROR` (Server -> Client): Invalid/out-of-turn move or malformed packet (15 defined error codes).
+6. `ERROR` (Server -> Client): Invalid/out-of-turn move or malformed packet (16 defined error codes; `TOURNAMENT_RULE` was added in Sprint 3).
 7. `DISCONNECT` (Client -> Server): Intentional quit, which forfeits immediately.
 8. `GAME_OVER` (Server -> Clients): WIN / FORFEIT notification (winner, win reason) with final board and captures.
 9. `RECONNECT` (Client -> Server): Rejoin an in-progress game within the 60-second grace period.
@@ -88,9 +88,25 @@
 
 ## 4. Coding & AI Implementation Plan (Sprint 3)
 
-- **Permitted AI Tools:** [e.g., GitHub Copilot, ChatGPT, Claude]
-- **AI Prompting & Constraint Strategy:** Explain how you will constrain AI models to generate code (in Python or your chosen language) that adheres strictly to the protocol blueprint and FSM designed in Sprints 1 & 2.
-- **Implementation Risk Management:** Detail your plan to leverage past programming experience and manage time to ensure code completion on schedule.
+> Code: [`server.py`](server.py), [`client.py`](client.py), and the shared [`pente/`](pente/) package. How to run it: [`README.md`](README.md).
+
+- **Language:** Python 3.11, standard library only (`socket`, `threading`, `json`, `argparse`, `secrets`, `logging`, `dataclasses`). Nothing to install on the CML nodes.
+- **Permitted AI Tools:** Claude (Claude Code), used to generate the modules and their tests from my specs; GitHub Copilot for inline completion only.
+- **AI Prompting & Constraint Strategy:** The full strategy and the prompt log are in [`docs/ai_prompts.md`](docs/ai_prompts.md). In short:
+  - The protocol blueprint, FSM spec, and concurrency design were given to the AI as the **normative spec**. Message types, error codes, field names, and state names are closed sets; the AI may not add or rename any.
+  - The code was built **one layer at a time**, each with its own tests: framing → messages → game rules → FSM → server/client sockets.
+  - Every FSM transition logs its row ID from the spec tables (for example `FSM PLAYER_TURN -> EVALUATE_MOVE [G2 ...]`), so the server log can be checked line by line against `fsm_specification.md`.
+  - The verification gate in `ai_prompts.md` §4 was applied before committing: closed-set check, no `recv()` under the lock, every send under the lock, EOF checks, and all tests passing.
+- **CLI (Sprint 3 §2.1):** `server.py -h | -p PORT` binds `0.0.0.0`. `client.py -h | -i HOSTNAME -p PORT [-a NAME]`. `-i` and `-p` are required. The client resolves `-i` with `socket.gethostbyname()` (no hard-coded IPs). On `socket.gaierror` it prints a message pointing at the router DNS configuration and exits with status 1, with no traceback (§2.2).
+- **Implementation Risk Management:**
+
+  | Risk | How it was handled |
+  |---|---|
+  | Running out of time with one big untested program | Built bottom-up in small modules, each with unit tests (93 tests), including end-to-end tests that run the real server over TCP sockets, so every change could be checked quickly |
+  | Developing on Windows, deploying to Linux CML nodes | Linux-only socket options (`TCP_KEEPIDLE`, `TCP_USER_TIMEOUT`) are applied only when present (`hasattr`). The board is drawn with box-drawing lines by default; `client.py -b ascii` switches to plain ASCII if a lab console can't show them |
+  | Reading keyboard input while server updates keep arriving | `input()` runs in its own thread and feeds a queue, so the board refreshes as soon as the opponent moves. (`select()` cannot watch the keyboard on Windows) |
+  | Bugs that only show up with two clients at once | FSM tests send moves from two threads at the same time and check that turns never double up and both players see identical states in the same order |
+  | Disconnect and rejoin paths are hard to test by hand | Tested with a killed client relaunched within 60 s, a cut connection through a TCP proxy (client rejoins on its own), and a shortened grace timer in the unit tests |
 
 ---
 
