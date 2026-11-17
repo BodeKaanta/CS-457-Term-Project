@@ -140,9 +140,15 @@ If every ping fails:
 
    Name:      server.kaanta.edu
    Address:   192.168.20.100
+
+   *** Can't find server.kaanta.edu: No answer
    ```
 
-3. **Stop** the capture and **download** it. Save it in the repository root as **`dns_raw.pcap`** (or `dns_raw.pcapng`, whichever CML gives you). This is the raw capture; Step 5 turns it into the deliverable. `dns_raw.*` is in `.gitignore`.
+   The last line is **expected**. BusyBox `nslookup` also asks for an IPv6 (AAAA) address, and R1 has none, so that second lookup is empty. The IPv4 answer above it is the one that matters.
+
+   If the output also says **"Non-authoritative answer:"**, R1 is missing `ip dns primary kaanta.edu soa R1.kaanta.edu admin.kaanta.edu` (in [`R1.cfg`](R1.cfg)). Without it, IOS answers from the host table without the authoritative (AA) flag. Add it in `configure terminal`, then `write memory`, then run `nslookup` again.
+
+3. **Stop** the capture and **download** it. Save it in the repository root as **`dns_raw.pcap`** (or `dns_raw.pcapng`, whichever CML gives you). This is the raw capture; Step 5 turns it into the deliverable. `dns_raw.*` is in `.gitignore`. **Check where your browser saved it.** It must end up in the `CS-457-Term-Project-sprint4` folder (move it there if needed), and Step 5 must be run from that folder.
 4. Run `nslookup server.kaanta.edu` on `bk-Client2` as well, for the report. No capture is needed for this one.
 5. On this PC, check the capture and write the **annotated** deliverable:
 
@@ -158,7 +164,7 @@ If every ping fails:
 If `nslookup` fails:
 - `cat /etc/resolv.conf` must say `nameserver 192.168.10.1`. If not, run `udhcpc` again.
 - On R1, `show hosts` must list the name.
-- `show running-config | include dns|domain` must show `ip dns server`, and must **not** show `no ip domain lookup`.
+- `show running-config | include dns|domain` must show `ip dns server` and `ip dns primary kaanta.edu ...`, and must **not** show `no ip domain lookup`.
 
 > To see every comment at once in Wireshark: *Statistics → Capture File Properties* lists the capture comment and all packet comments. You can also add or edit a comment by hand: right-click a packet → *Packet Comments*, then save in pcapng format.
 

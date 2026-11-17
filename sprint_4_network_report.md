@@ -75,10 +75,13 @@ interface GigabitEthernet0/3
 ```text
 ip domain lookup
 ip dns server
+ip dns primary kaanta.edu soa R1.kaanta.edu admin.kaanta.edu
 ip host server.kaanta.edu 192.168.20.100
 ```
 
-`ip dns server` makes R1 answer DNS queries on UDP/TCP port 53 on all of its interfaces. `ip host` adds a static A record to R1's host table. Because R1 owns that record, its answer is marked **authoritative** (the AA flag in §8).
+`ip dns server` makes R1 answer DNS queries on UDP/TCP port 53 on all of its interfaces. `ip host` adds a static A record to R1's host table. `ip dns primary` makes R1 the primary DNS server (the start of authority, SOA) for the `kaanta.edu` zone. With all three, R1's answers are marked **authoritative**: the AA flag is set in §8.
+
+> **Found while testing:** with only `ip dns server` and `ip host`, IOS answered correctly but *without* the AA flag, and the client's `nslookup` printed "Non-authoritative answer". Adding `ip dns primary` fixed that. The capture in §8 shows the AA flag set, and R1's reply to the IPv6 query carries the zone's SOA record naming `R1.kaanta.edu`.
 
 ### 2.3 DHCP: one pool per client subnet
 
@@ -203,9 +206,11 @@ TODO
 
 `nslookup server.kaanta.edu` on each client. The client sends the query to the DNS server it learned from DHCP (its own gateway on R1), and R1 answers from its host table.
 
+BusyBox `nslookup` on Alpine looks up both the IPv4 (A) and the IPv6 (AAAA) address. The A answer is `192.168.20.100`. R1 has no IPv6 address for the server, so the AAAA lookup comes back empty and `nslookup` adds the line `*** Can't find server.kaanta.edu: No answer`. That line is about IPv6 only and is expected.
+
 ### bk-Client1
 
-**TODO (paste):** `Server: 192.168.10.1` … `Name: server.kaanta.edu` / `Address: 192.168.20.100`.
+**TODO (paste):** `Server: 192.168.10.1` … `Name: server.kaanta.edu` / `Address: 192.168.20.100` (with no "Non-authoritative answer" line, since `ip dns primary` was added).
 
 ```text
 TODO
@@ -225,17 +230,46 @@ TODO
 
 **Annotations:** every DNS packet in [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) carries a Wireshark packet comment explaining it, and the file has a capture comment saying where and how it was captured. In Wireshark, a packet's comment appears at the top of its details pane under *Packet comments*, and *Statistics → Capture File Properties* lists them all. The comments were added with `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`, which copies the raw CML capture unchanged (same packets, same timestamps) and adds the comments. The file is stored in pcapng format, because the classic pcap format cannot hold comments; Wireshark opens it normally.
 
-**TODO (screenshot):** Wireshark with display filter `dns`, the response packet selected, and both *Packet comments* and *Domain Name System (response) → Answers* expanded → save as `docs/sprint_4/wireshark_dns.png`
+**TODO (screenshot):** Wireshark with display filter `dns`, the response packet (frame 3) selected and *Answers* expanded, with arrows drawn to the query (frame 1) and the response (frame 3) → save as `docs/sprint_4/wireshark_dns.png`
 
 ![Wireshark DNS query and response](docs/sprint_4/wireshark_dns.png)
 
 ### Annotated exchange
 
-**TODO (paste):** output of `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`. It lists every DNS packet in the capture and annotates the query and the response (frame numbers, ports, transaction ID, flags, and the answer), and should end with `PASS`.
+Wireshark's packet list for the capture (`tshark -r sprint_4_dns_lookup.pcap`):
 
 ```text
-TODO
+    1 0.000000000 192.168.10.2 → 192.168.10.1 DNS 77 Standard query 0x2301 A server.kaanta.edu
+    2 0.000252000 192.168.10.2 → 192.168.10.1 DNS 77 Standard query 0x2302 AAAA server.kaanta.edu
+    3 0.017358000 192.168.10.1 → 192.168.10.2 DNS 93 Standard query response 0x2301 A server.kaanta.edu A 192.168.20.100
+    4 0.020041000 192.168.10.1 → 192.168.10.2 DNS 152 Standard query response 0x2302 AAAA server.kaanta.edu SOA R1.kaanta.edu
+    5 3.641510000 52:54:00:7b:d3:fd → 52:54:00:7b:d3:fd LOOP 60 Reply
+    6 5.102761000 52:54:00:4e:45:be → 52:54:00:7b:d3:fd ARP 42 Who has 192.168.10.1? Tell 192.168.10.2
+    7 5.105798000 52:54:00:7b:d3:fd → 52:54:00:4e:45:be ARP 60 192.168.10.1 is at 52:54:00:7b:d3:fd
 ```
+
+Frames 1–4 are the lookup. Frames 5–7 are background traffic on the link, not DNS: R1's Ethernet keepalive (IOS sends a loopback frame to its own MAC on Gi0/1), and Client 1 confirming R1's MAC address with ARP.
+
+Output of `python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap`:
+
+7 packets read, 4 DNS messages.
+
+DNS messages in `sprint_4_dns_lookup.pcap` (UDP port 53):
+
+| No. | Time (s) | Source | Destination | Type | Transaction ID | Question | Answer | Flags |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 0.000000 | 192.168.10.2:44452 | 192.168.10.1:53 | Standard query | 0x2301 | server.kaanta.edu A |  | RD |
+| 2 | 0.000252 | 192.168.10.2:44452 | 192.168.10.1:53 | Standard query | 0x2302 | server.kaanta.edu AAAA |  | RD |
+| 3 | 0.017358 | 192.168.10.1:53 | 192.168.10.2:44452 | Standard query response | 0x2301 | server.kaanta.edu A | A 192.168.20.100 | QR AA RD RA |
+| 4 | 0.020041 | 192.168.10.1:53 | 192.168.10.2:44452 | Standard query response | 0x2302 | server.kaanta.edu AAAA | (no answer) | QR AA RD RA |
+
+Annotation of the required lookup:
+
+- **Frame 1: DNS Standard Query.** 192.168.10.2 (the client) sends a UDP datagram from port 44452 to 192.168.10.1 port 53, the DNS server on R1 that DHCP gave the client. It asks for the **A record** (IPv4 address) of `server.kaanta.edu`. Transaction ID 0x2301; flags: RD (RD = recursion desired).
+- **Frame 3: DNS Standard Query Response.** 192.168.10.1 port 53 answers back to 192.168.10.2 port 44452 17.4 ms later with the same transaction ID 0x2301, which is how the client matches it to its query. Flags: QR AA RD RA (QR = this is a response, AA = authoritative answer: R1 is the primary DNS server for the zone (`ip dns primary`) and the record comes from its `ip host` table). Reply code NOERROR. Answer: **`server.kaanta.edu` A 192.168.20.100** (TTL 10 s).
+- Other queries in the capture (AAAA) are normal: nslookup also asks for an IPv6 (AAAA) address, and some versions look up the DNS server's own name (PTR).
+
+PASS: query for `server.kaanta.edu` answered with 192.168.20.100 found.
 
 ### What the two key packets show
 
@@ -244,7 +278,7 @@ TODO
 | Transport | UDP, from a random high source port to destination port **53** | UDP, source port **53** back to the client's port |
 | Addresses | Client 1's DHCP address → 192.168.10.1 (the DNS server from DHCP option 6) | 192.168.10.1 → Client 1 |
 | Transaction ID | Random 16-bit ID chosen by the client | **Same ID**, which is how the client matches the reply to its query |
-| Flags | QR = 0 (query), RD = 1 (recursion desired) | QR = 1 (response), **AA = 1** (authoritative, from R1's `ip host` table), RCODE = 0 (NOERROR) |
+| Flags | QR = 0 (query), RD = 1 (recursion desired) | QR = 1 (response), **AA = 1** (authoritative: R1 is the primary server for `kaanta.edu`, §2.2), RA = 1, RCODE = 0 (NOERROR) |
 | Question | `server.kaanta.edu`, type **A**, class IN | The question is repeated |
 | Answer | — | **`server.kaanta.edu` A `192.168.20.100`** |
 

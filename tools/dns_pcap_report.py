@@ -385,7 +385,9 @@ def render(path: str, items: list[DnsPacket], name: str, ip: str) -> tuple[str, 
             f"{(r.packet.time - q.packet.time) * 1000:.1f} ms later with the same transaction "
             f"ID 0x{r.dns.txid:04x}, which is how the client matches it to its query. Flags: "
             f"{r.dns.flags_text()} (QR = this is a response"
-            + (", AA = authoritative answer from R1's `ip host` table" if r.dns.aa else "")
+            + (", AA = authoritative answer: R1 is the primary DNS server for the zone "
+               "(`ip dns primary`) and the record comes from its `ip host` table"
+               if r.dns.aa else "")
             + f"). Reply code {RCODES.get(r.dns.rcode, r.dns.rcode)}. Answer: "
             f"**`{wanted}` A {ip}** (TTL {ttl} s).",
         ]
@@ -424,7 +426,8 @@ def packet_comments(items: list[DnsPacket], found: tuple[DnsPacket, DnsPacket, i
             f"{r.dgram.dport}, same transaction ID 0x{r.dns.txid:04x} as frame "
             f"{q.packet.number}, so the client matches it to that query. Flags: "
             f"{r.dns.flags_text()} (QR = response"
-            + (", AA = authoritative: from R1's 'ip host' table" if r.dns.aa else "")
+            + (", AA = authoritative: R1 is the primary server for the zone and the "
+               "record is its 'ip host' entry" if r.dns.aa else "")
             + f"). Reply code {RCODES.get(r.dns.rcode, r.dns.rcode)}.",
     }
     for it in items:
