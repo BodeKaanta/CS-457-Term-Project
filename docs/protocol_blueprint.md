@@ -14,7 +14,7 @@ This document is the single source of truth for every byte exchanged between `cl
 | Property | Decision |
 |---|---|
 | Transport | TCP (IPv4), single persistent connection per client |
-| Server endpoint | `server.kaanta.edu` : **`5457`** (resolved via R2 DNS → `192.168.20.100`) |
+| Server endpoint | `server.kaanta.edu` : **`5457`** (resolved via the DNS server on router R1 → `192.168.20.100`) |
 | Serialization | JSON object, UTF-8 encoded |
 | Framing | **Newline-delimited JSON (NDJSON)**: every message is exactly one JSON object followed by one `\n` (`0x0A`) |
 | Max frame size | **8192 bytes** including the `\n` |
@@ -108,7 +108,7 @@ def send_msg(sock, msg: dict) -> None:
 **How the endpoint is established:**
 
 1. **Server (passive open):** `server.py` creates a TCP socket, sets `SO_REUSEADDR` (so a restart doesn't fail with "address already in use"), then calls `bind(("0.0.0.0", 5457))` to accept connections on every interface of the server node. It then calls `listen()` and loops on `accept()`. Each `accept()` returns a **new** socket dedicated to one client; the listening socket keeps waiting for others.
-2. **Name resolution:** the client only knows the name `server.kaanta.edu`. It calls `socket.gethostbyname("server.kaanta.edu")` (the call named in the Sprint 3 spec), which asks the DNS server. In the CML topology (Sprint 4–5) that is Router R2, which answers `192.168.20.100`. During local development, `-i localhost` is passed instead. If resolution fails (`socket.gaierror`), the client prints an error that points at the router DNS configuration and exits with status 1.
+2. **Name resolution:** the client only knows the name `server.kaanta.edu`. It calls `socket.gethostbyname("server.kaanta.edu")` (the call named in the Sprint 3 spec), which asks the DNS server. In the CML topology (Sprint 4–5) that is Router R1 (each client learns it from DHCP), which answers `192.168.20.100`. During local development, `-i localhost` is passed instead. If resolution fails (`socket.gaierror`), the client prints an error that points at the router DNS configuration and exits with status 1.
 3. **Client (active open):** the client calls `connect(("192.168.20.100", 5457))`. The OS picks a random ephemeral source port and performs the TCP 3-way handshake (SYN → SYN-ACK → ACK).
 4. **Connection identity:** each connection is the unique 4-tuple *(client IP, client port, server IP, 5457)*. The server ties a player's seat to that connection. Its first application message must be `CONNECT` or `RECONNECT`.
 

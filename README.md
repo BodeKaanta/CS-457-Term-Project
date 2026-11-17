@@ -31,7 +31,7 @@ python3 server.py -p 5457       # start the server on port 5457
 
 ```bash
 python3 client.py -h
-python3 client.py -i server.kaanta.edu -p 5457 -a Alice   # in the CML lab (DNS from Router R2)
+python3 client.py -i server.kaanta.edu -p 5457 -a Alice   # in the CML lab (DNS from Router R1)
 python3 client.py -i localhost -p 5457 -a Bob             # local testing on one machine
 ```
 
@@ -66,6 +66,15 @@ python3 -m unittest discover -s tests -t .
 ```
 
 The suite covers framing (including TCP fragmentation and coalescing), message validation, every Pente rule, the FSM transition rows (lobby, gameplay, disconnect, reconnect, grace timeout, and concurrent moves from two threads), and full games over real sockets on localhost. `pytest` also runs these tests if it is installed.
+
+## Sprint 4: CML network
+
+The game runs on a Cisco Modeling Labs topology: one IOSv router, R1, connects the two client subnets and the server subnet. R1 leases client addresses by DHCP and answers DNS for `server.kaanta.edu`.
+
+- [`sprint_4_topology.yaml`](sprint_4_topology.yaml): the CML lab export (import it into CML to rebuild the topology)
+- [`sprint_4_network_report.md`](sprint_4_network_report.md): verification report
+- [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap): annotated DNS capture
+- `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`: checks the raw CML capture, prints an annotated summary for the report, and writes the deliverable capture with a Wireshark comment on every DNS packet
 
 ## Documentation
 
