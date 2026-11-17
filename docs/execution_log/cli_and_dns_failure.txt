@@ -14,6 +14,7 @@ Example: python3 server.py -p 5457
 
 $ python3 client.py -h
 usage: client.py [-h] -i HOSTNAME -p PORT [-a ALIAS] [-s {dots,xo}]
+                 [-b {lines,ascii}]
 
 Terminal client for networked Pente. Connects to the game server, shows the
 board, and sends your moves.
@@ -30,6 +31,10 @@ options:
   -s {dots,xo}, --stones {dots,xo}
                         stone symbols: xo = X and O (default), dots = filled
                         and hollow circles
+  -b {lines,ascii}, --board {lines,ascii}
+                        board drawing: lines = grid lines like a real board
+                        (default), ascii = plain ASCII for consoles that show
+                        boxes or '?' instead of lines
 
 Example: python3 client.py -i server.kaanta.edu -p 5457 -a Alice
 (exit status 0)

@@ -213,6 +213,12 @@ class ClientHelperTests(unittest.TestCase):
         for bad in ("", "K", "10", "9 9", "KK10", "K1O", "K100", "10K"):
             self.assertIsNone(client.parse_move(bad), bad)
 
+    @staticmethod
+    def point(text, notation):
+        """The character drawn at a point, e.g. point(text, "J10")."""
+        r, c = client.game.from_notation(notation)
+        return text.splitlines()[1 + r][4 + 3 * c + 1]
+
     def test_render_board_marks_last_move(self):
         board = ["." * 19 for _ in range(19)]
         board[9] = "." * 9 + "1" + "2" + "." * 8      # X at J10, O at K10
@@ -222,22 +228,55 @@ class ClientHelperTests(unittest.TestCase):
         self.assertEqual(lines[0].split(), list("ABCDEFGHIJKLMNOPQRS"))
         self.assertTrue(lines[1].startswith(" 19 ") and lines[19].startswith("  1 "))
         self.assertTrue(lines[10].startswith(" 10 "))
-        self.assertIn(" X [O]", lines[10])
+        self.assertIn("─X─[O]─", lines[10])   # stones sit on the line
         self.assertEqual(lines[10].index("X"), lines[0].index("J"))  # X sits under J
-        self.assertTrue(all(ord(ch) < 128 for ch in text))  # plain ASCII for lab consoles
+        self.assertEqual(self.point(text, "J10"), "X")
+        # Every row is the same width, so the vertical lines stay straight.
+        self.assertTrue(all(line[4 + 3 * 19] == " " for line in lines[1:20]))
+
+    def test_lines_board_glyphs(self):
+        text = client.render_board(["." * 19 for _ in range(19)], None)
+        expected = {
+            "A19": "┌", "S19": "┐", "A1": "└", "S1": "┘",  # corners
+            "A10": "├", "S10": "┤", "J19": "┬", "J1": "┴",  # edges
+            "C3": "┼",                                               # plain point
+            "J10": "╋",                                              # center
+            "G13": "╆", "M13": "╅", "G7": "╄", "M7": "╃",  # box corners
+            "J13": "┿", "J7": "┿", "G10": "╂", "M10": "╂",  # box sides
+        }
+        for notation, glyph in expected.items():
+            self.assertEqual(self.point(text, notation), glyph, notation)
+        row13 = text.splitlines()[1 + 6]
+        self.assertIn("━━", row13)          # heavy line along the top of the box
+        self.assertNotIn("━", text.splitlines()[1 + 5])
+
+    def test_ascii_board(self):
+        board = ["." * 19 for _ in range(19)]
+        board[9] = "." * 9 + "1" + "2" + "." * 8
+        try:
+            client.set_display("xo", "ascii")
+            text = client.render_board(board, None)
+        finally:
+            client.set_display()
+        self.assertTrue(all(ord(ch) < 128 for ch in text))  # for consoles without box glyphs
+        self.assertEqual(self.point(text, "J10"), "X")
+        self.assertEqual(self.point(text, "C3"), "+")
+        self.assertEqual(self.point(text, "G13"), "#")
+        self.assertIn("#==#", text.splitlines()[1 + 6])
+        empty = client.render_board(["." * 19 for _ in range(19)], None)
+        self.assertEqual(self.point(empty, "J10"), "╋")   # back to lines after reset
 
     def test_dots_stone_style(self):
         board = ["." * 19 for _ in range(19)]
         board[9] = "." * 9 + "12" + "." * 8
         try:
-            client.set_stone_style("dots")
+            client.set_display("dots")
             text = client.render_board(board, None)
-            self.assertIn(" ●  ○ ", text.splitlines()[10])
+            self.assertIn("●──○", text.splitlines()[10])
             self.assertEqual(client.PLAYER_SYMBOL["P1"], "●")
         finally:
-            client.set_stone_style("xo")
+            client.set_display()
         self.assertEqual(client.PLAYER_SYMBOL, {"P1": "X", "P2": "O"})
-
 
 if __name__ == "__main__":
     unittest.main()

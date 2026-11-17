@@ -3,7 +3,7 @@
 
 Usage:
     python3 client.py -h
-    python3 client.py -i server.kaanta.edu -p 5457 [-a Alice] [-s dots]
+    python3 client.py -i server.kaanta.edu -p 5457 [-a Alice] [-s dots] [-b ascii]
 
 Threads:
     main      reads commands from the input queue and sends MOVE / DISCONNECT
@@ -35,11 +35,29 @@ RECONNECT_WINDOW_SEC = 60    # ... for up to 60 s (the server's grace period)
 SESSION_FILE_PREFIX = ".pente_session_"
 RECV_SIZE = 4096
 
-# Stone symbols, chosen with -s. "xo" is plain ASCII, which every console can
-# show (including the CML lab nodes). "dots" uses filled and hollow circles.
+# Stone symbols, chosen with -s: X and O, or filled and hollow circles.
 STONE_STYLES = {"xo": ("X", "O"), "dots": ("●", "○")}  # dots: P1 filled, P2 hollow
-SYMBOL = {"1": "X", "2": "O", ".": "."}       # wire cell -> printed symbol
+SYMBOL = {"1": "X", "2": "O"}                 # wire cell -> printed stone
 PLAYER_SYMBOL = {"P1": "X", "P2": "O"}
+
+# Board drawing, chosen with -b. "lines" draws the grid with box-drawing
+# characters, like a real board: light lines, a heavy cross on the center
+# point, and a heavier box 3 points out from the center (the tournament-rule
+# box: P1's second stone traditionally goes on or outside it). "ascii" draws
+# the same board with + - = # * for consoles that can't show those characters.
+BOARD_STYLES = ("lines", "ascii")
+DISPLAY = {"board": "lines"}
+CENTER = game.SIZE // 2   # J10
+BOX = 3                   # the box is every point exactly 3 steps from the center
+# Grid glyph for an empty point, keyed by the weight of its (up, down, left,
+# right) lines: 0 = no line (board edge), 1 = light, 2 = heavy (on the box).
+GLYPH = {
+    (0, 1, 0, 1): "┌", (0, 1, 1, 0): "┐", (1, 0, 0, 1): "└", (1, 0, 1, 0): "┘",
+    (1, 1, 0, 1): "├", (1, 1, 1, 0): "┤", (0, 1, 1, 1): "┬", (1, 0, 1, 1): "┴",
+    (1, 1, 1, 1): "┼",
+    (1, 1, 2, 2): "┿", (2, 2, 1, 1): "╂",                       # box sides
+    (1, 2, 1, 2): "╆", (1, 2, 2, 1): "╅", (2, 1, 1, 2): "╄", (2, 1, 2, 1): "╃",  # box corners
+}
 WIN_REASON_TEXT = {
     "FIVE_IN_A_ROW": "five in a row",
     "FIVE_CAPTURES": "five captured pairs",
@@ -75,18 +93,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("-s", "--stones", choices=sorted(STONE_STYLES), default="xo",
                         help="stone symbols: xo = X and O (default), dots = filled and "
                              "hollow circles")
+    parser.add_argument("-b", "--board", choices=BOARD_STYLES, default="lines",
+                        help="board drawing: lines = grid lines like a real board (default), "
+                             "ascii = plain ASCII for consoles that show boxes or '?' instead "
+                             "of lines")
     return parser.parse_args(argv)
 
 
-def set_stone_style(style: str) -> None:
-    """Switch the printed stone symbols ("xo" or "dots") for this process."""
-    p1, p2 = STONE_STYLES[style]
+def set_display(stones: str = "xo", board: str = "lines") -> None:
+    """Choose the stone symbols and board drawing for this process."""
+    p1, p2 = STONE_STYLES[stones]
     SYMBOL.update({"1": p1, "2": p2})
     PLAYER_SYMBOL.update({"P1": p1, "P2": p2})
+    DISPLAY["board"] = board
+    sample = p1 + p2 + ("".join(GLYPH.values()) + "╋━" if board == "lines" else "")
     try:
-        (p1 + p2).encode(sys.stdout.encoding or "ascii")
+        sample.encode(sys.stdout.encoding or "ascii")
     except (UnicodeEncodeError, LookupError):
-        # This output can't show the circles (e.g. piped output on Windows).
+        # This output can't encode the symbols (e.g. piped output on Windows).
         # Switch it to UTF-8 rather than crash with UnicodeEncodeError.
         try:
             sys.stdout.reconfigure(encoding="utf-8")
@@ -187,8 +211,46 @@ def parse_move(text: str) -> tuple[int, int] | None:
     return game.from_notation(text)
 
 
+def on_box(r: int, c: int) -> bool:
+    """True for the points of the box drawn 3 steps out from the center."""
+    return max(abs(r - CENTER), abs(c - CENTER)) == BOX
+
+
+def line_weight(r1: int, c1: int, r2: int, c2: int) -> int:
+    """The line between neighboring points: 0 = none (off the board), 2 = box, 1 = grid."""
+    if not game.in_bounds(r2, c2):
+        return 0
+    # Two neighboring box points are always joined along the box, never across it.
+    return 2 if on_box(r1, c1) and on_box(r2, c2) else 1
+
+
+def grid_point(r: int, c: int) -> str:
+    """What an empty point looks like: a line crossing, or the ASCII equivalent."""
+    ascii_board = DISPLAY["board"] == "ascii"
+    if (r, c) == (CENTER, CENTER):
+        return "*" if ascii_board else "╋"
+    if ascii_board:
+        return "#" if on_box(r, c) else "+"
+    return GLYPH[(line_weight(r, c, r - 1, c), line_weight(r, c, r + 1, c),
+                  line_weight(r, c, r, c - 1), line_weight(r, c, r, c + 1))]
+
+
+def h_line(r: int, c1: int, c2: int) -> str:
+    """One character of the horizontal line from (r, c1) toward (r, c2)."""
+    weight = line_weight(r, c1, r, c2)
+    if DISPLAY["board"] == "ascii":
+        return " -="[weight]
+    return " ─━"[weight]
+
+
 def render_board(board: list[str], last_move: dict | None) -> str:
-    """Draw the board with column letters and row numbers. The last move is in [ ]."""
+    """Draw the board with column letters and row numbers. The last move is in [ ].
+
+    Each point is 3 characters wide: the line coming in from the left, the
+    stone or line crossing, and the line going out to the right. Vertical
+    lines need no extra rows, because each crossing glyph reaches the full
+    height of its line and joins the glyphs above and below it.
+    """
     last = (last_move["row"], last_move["col"]) if last_move else None
     size = len(board)
     letters = "    " + "".join(f" {game.COLUMNS[c]} " for c in range(len(board[0])))
@@ -196,8 +258,11 @@ def render_board(board: list[str], last_move: dict | None) -> str:
     for r, row in enumerate(board):
         cells = []
         for c, cell in enumerate(row):
-            sym = SYMBOL.get(cell, "?")
-            cells.append(f"[{sym}]" if (r, c) == last else f" {sym} ")
+            if (r, c) == last:
+                cells.append(f"[{SYMBOL.get(cell, '?')}]")
+                continue
+            mark = grid_point(r, c) if cell == game.EMPTY else SYMBOL.get(cell, "?")
+            cells.append(h_line(r, c, c - 1) + mark + h_line(r, c, c + 1))
         number = size - r          # row 1 at the bottom, like chess
         lines.append(f"{number:>3} " + "".join(cells) + f" {number}")
     lines.append(letters)
@@ -678,7 +743,7 @@ class PenteClient:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    set_stone_style(args.stones)
+    set_display(args.stones, args.board)
     hostname = args.hostname.strip()
     if not hostname:
         print("[ERROR] The server hostname (-i) cannot be empty.")

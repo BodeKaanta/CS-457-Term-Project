@@ -37,7 +37,10 @@ python3 client.py -i localhost -p 5457 -a Bob             # local testing on one
 
 `-i` is a DNS hostname. The client resolves it with `socket.gethostbyname()` and never uses a hard-coded IP. If the name cannot be resolved, the client prints a clear error and exits with status 1. `-a` (player name) is optional; the client asks for it if it is left out.
 
-`-s dots` (optional) draws the stones as `●` (P1) and `○` (P2) instead of `X` and `O`. X/O is the default because it is plain ASCII and shows correctly on any console.
+The board is drawn with grid lines like a real Pente board, with a heavy cross on the center point (`J10`) and a heavier box 3 points out from the center (`G7` to `M13`), the box used by the tournament rule for P1's second stone. Two display options:
+
+- `-s dots` draws the stones as `●` (P1) and `○` (P2) instead of `X` and `O`.
+- `-b ascii` draws the same board with plain ASCII (`+`, `-`, `#` for the box, `*` for the center), for a console that shows boxes or `?` instead of lines.
 
 **Playing:** the first player to connect is P1 (`X`) and moves first. When the screen shows `>>> YOUR TURN`, type a move chess-style: a column letter `A`-`S`, then a row number `1`-`19`, e.g. `J10` (the center). Columns run left to right and row 1 is at the bottom, so a move reads like an (x, y) point. Letters are printed above and below the board and numbers on both sides. Other commands: `board` (redraw), `help`, `quit` (forfeit and leave). The last move is shown in brackets, like `[X]`.
 
