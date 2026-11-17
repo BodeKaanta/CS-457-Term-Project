@@ -26,7 +26,7 @@ Where to find the evidence for each rubric criterion:
 
 ## 1. Topology
 
-**TODO (screenshot):** CML canvas with the custom node names → save as `docs/sprint_4/topology.png`
+The CML canvas: the custom node names, the three links, and the router and host interfaces on each link.
 
 ![CML topology](docs/sprint_4/topology.png)
 
@@ -102,21 +102,12 @@ R1 chooses the pool from the interface the DHCP Discover arrives on. A Discover 
 
 ## 3. Router verification
 
-### `show ip interface brief`
+### `show ip interface brief` and `show ip route`
 
-**TODO (paste):** Gi0/1, Gi0/2, Gi0/3 should show their addresses and **up / up**.
+![R1 show ip interface brief and show ip route](docs/sprint_4/r1_interfaces_routes.png)
 
-```text
-TODO
-```
-
-### `show ip route`
-
-**TODO (paste):** three connected (**C**) routes, for 192.168.10.0/24, 192.168.11.0/24 and 192.168.20.0/24, plus their local (**L**) /32 routes.
-
-```text
-TODO
-```
+- `show ip interface brief`: Gi0/1 (192.168.10.1), Gi0/2 (192.168.11.1), and Gi0/3 (192.168.20.1) are all **up / up**. Gi0/0 is unused and administratively down, as configured.
+- `show ip route`: three connected (**C**) routes, for 192.168.10.0/24 on Gi0/1, 192.168.11.0/24 on Gi0/2, and 192.168.20.0/24 on Gi0/3, each with its local (**L**) /32 route for R1's own address. There are no static routes and no gateway of last resort, because every subnet is directly connected.
 
 ### `show ip dhcp binding`
 
@@ -126,13 +117,11 @@ TODO
 TODO
 ```
 
-### `show hosts`
+### `show hosts` (extra, supports §2.2)
 
-**TODO (paste):** `server.kaanta.edu` → 192.168.20.100.
+![R1 show hosts](docs/sprint_4/r1_show_hosts.png)
 
-```text
-TODO
-```
+R1's host table holds the static entry `server.kaanta.edu` → `192.168.20.100` with flags `(perm, OK)`: a permanent entry from the `ip host` command.
 
 ## 4. Game server: static address and default gateway
 
@@ -146,11 +135,11 @@ sudo ip route add default via 192.168.20.1
 
 The default route is what lets the server answer the clients. The client subnets are not 192.168.20.0/24, so without it the server would receive a ping or a TCP SYN from 192.168.10.x but have no route to send the reply back ("Network is unreachable").
 
-**TODO (paste):** `ip addr show eth0` and `ip route` from `bk-Server`.
+`ip addr show eth0` and `ip route` on `bk-Server`:
 
-```text
-TODO
-```
+![bk-Server ip addr and ip route](docs/sprint_4/server_ip.png)
+
+eth0 is up with the static address **192.168.20.100/24**, and the routing table has **default via 192.168.20.1** (R1 Gi0/3) plus the connected 192.168.20.0/24 route.
 
 ## 5. Client DHCP leases
 
