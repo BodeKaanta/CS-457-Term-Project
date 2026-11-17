@@ -1,6 +1,6 @@
 """PenteServer: the server's game state machine and shared state.
 
-Implements fsm_specification.md (transition rows L1-L7, G1-G11, D1-D9, X1-X4)
+Implements fsm_specification.md (transition rows L1-L7, G1-G12, D1-D9, X1-X4)
 with the threading rules of concurrency_design.md §3:
 
 * One plain threading.Lock (state_lock) guards ALL shared state.
@@ -106,9 +106,13 @@ class PenteServer:
     """The single game room. Thread-safe: every public method takes state_lock."""
 
     def __init__(self, grace_period: float = GRACE_PERIOD_SEC,
-                 max_connections: int = MAX_CONNECTIONS) -> None:
+                 max_connections: int = MAX_CONNECTIONS,
+                 tournament_rule: bool = True) -> None:
         self.state_lock = threading.Lock()
         self.grace_period = grace_period
+        # The opening rule (G12). Always on in server.py; unit tests of other
+        # rules turn it off so they can open anywhere on the board.
+        self.tournament_rule = tournament_rule
         self.max_connections = max_connections
         self.game = GameState()
         self.game_id = 0
@@ -293,7 +297,7 @@ class PenteServer:
         self._set_state_locked(PLAYER_TURN, "G1 P1 moves first")
         self._broadcast_locked(self._state_update_msg_locked())
 
-    # ---- Gameplay: MOVE (G2-G11) -------------------------------------
+    # ---- Gameplay: MOVE (G2-G12) -------------------------------------
 
     def _handle_move_locked(self, conn: Connection, seat_id: str, msg: dict) -> None:
         """Blueprint §3.4 validation order; the first failure wins."""
@@ -340,6 +344,14 @@ class PenteServer:
             self._send_error_locked(conn, "CELL_OCCUPIED",
                                     f"{game.to_notation(row, col)} already has a stone.", m.MOVE)
             self._set_state_locked(PLAYER_TURN, f"G6 cell occupied, {seat_id} keeps the turn")
+            return
+        # 6. Tournament rule for P1's first two stones (G12).
+        reason = (game.opening_rule_error(g.turn_number, row, col)
+                  if self.tournament_rule else None)
+        if reason:
+            self._send_error_locked(conn, "TOURNAMENT_RULE", reason, m.MOVE)
+            self._set_state_locked(PLAYER_TURN,
+                                   f"G12 tournament rule, {seat_id} keeps the turn")
             return
 
         # G7: legal move. Place, resolve captures.

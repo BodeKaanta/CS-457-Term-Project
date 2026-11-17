@@ -47,8 +47,8 @@ PLAYER_SYMBOL = {"P1": "X", "P2": "O"}
 # the same board with + - = # * for consoles that can't show those characters.
 BOARD_STYLES = ("lines", "ascii")
 DISPLAY = {"board": "lines"}
-CENTER = game.SIZE // 2   # J10
-BOX = 3                   # the box is every point exactly 3 steps from the center
+CENTER = game.CENTER      # J10
+BOX = game.BOX_DISTANCE   # the box is every point exactly 3 steps from the center
 # Grid glyph for an empty point, keyed by the weight of its (up, down, left,
 # right) lines: 0 = no line (board edge), 1 = light, 2 = heavy (on the box).
 GLYPH = {
@@ -214,7 +214,7 @@ def parse_move(text: str) -> tuple[int, int] | None:
 
 def on_box(r: int, c: int) -> bool:
     """True for the points of the box drawn 3 steps out from the center."""
-    return max(abs(r - CENTER), abs(c - CENTER)) == BOX
+    return game.center_distance(r, c) == BOX
 
 
 def line_weight(r1: int, c1: int, r2: int, c2: int) -> int:
@@ -601,7 +601,23 @@ class PenteClient:
                     and s["game_status"] == "ACTIVE" and s["active_player"] == self.player_id)
 
     def turn_prompt(self) -> str:
-        return ">>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'."
+        """The turn prompt, plus a reminder of the tournament rule on P1's first two moves.
+
+        The server enforces the rule (TOURNAMENT_RULE); this is only a hint.
+        """
+        text = ">>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'."
+        with self.lock:
+            turn = self.state["turn_number"] if self.state else None
+        center = game.to_notation(game.CENTER, game.CENTER)
+        if turn == 0:
+            text += f"\n    Tournament rule: your first stone goes on the center point, {center}."
+        elif turn == 2:
+            d = game.BOX_DISTANCE
+            box = (game.to_notation(game.CENTER + d, game.CENTER - d) + " to "
+                   + game.to_notation(game.CENTER - d, game.CENTER + d))
+            text += (f"\n    Tournament rule: your second stone goes on or outside "
+                     f"the box ({box}).")
+        return text
 
     def render_state(self) -> str:
         with self.lock:

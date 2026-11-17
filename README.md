@@ -42,7 +42,7 @@ The board is drawn with grid lines like a real Pente board, with a heavy cross o
 - `-s dots` draws the stones as `●` (P1) and `○` (P2) instead of `X` and `O`.
 - `-b ascii` draws the same board with plain ASCII (`+`, `-`, `#` for the box, `*` for the center), for a console that shows boxes or `?` instead of lines.
 
-**Playing:** the first player to connect is P1 (`X`) and moves first. When the screen shows `>>> YOUR TURN`, type a move chess-style: a column letter `A`-`S`, then a row number `1`-`19`, e.g. `J10` (the center). Columns run left to right and row 1 is at the bottom, so a move reads like an (x, y) point. Letters are printed above and below the board and numbers on both sides. Other commands: `board` (redraw), `help`, `quit` (forfeit and leave). The last move is shown in brackets, like `[X]`.
+**Playing:** the first player to connect is P1 (`X`) and moves first. When the screen shows `>>> YOUR TURN`, type a move chess-style: a column letter `A`-`S`, then a row number `1`-`19`, e.g. `J10` (the center). Columns run left to right and row 1 is at the bottom, so a move reads like an (x, y) point. Letters are printed above and below the board and numbers on both sides. **Tournament rule:** P1's first stone must go on the center point, `J10`, and P1's second stone must go on or outside the box (`G7` to `M13`). The server rejects anything else with `TOURNAMENT_RULE` and the player tries again; the prompt reminds P1 on those two turns. Other commands: `board` (redraw), `help`, `quit` (forfeit and leave). The last move is shown in brackets, like `[X]`.
 
 **Rejoining:** if a client crashes, loses its connection, or is closed with Ctrl-C, the server holds that player's seat for 60 seconds. A client whose connection drops retries on its own every 5 s. A client that was closed can be started again with the same `-a` name within 60 s and it rejoins automatically (it saves a `.pente_session_<name>.json` file for this). Typing `quit` is a forfeit.
 
@@ -53,7 +53,7 @@ The board is drawn with grid lines like a real Pente board, with a heavy cross o
 | `server.py` | Server CLI, accept loop, and one handler thread per connection |
 | `client.py` | Terminal client: CLI, DNS lookup, board display, input, auto-rejoin |
 | `pente/framing.py` | Newline-delimited JSON framing (`FrameReader`, `encode_frame`) |
-| `pente/messages.py` | The 11 message types, 15 error codes, validation, and message builders |
+| `pente/messages.py` | The 11 message types, 16 error codes, validation, and message builders |
 | `pente/game.py` | Pente rules (captures, five in a row) and Points Pente scoring |
 | `pente/fsm.py` | `PenteServer`: the game state machine, guarded by one lock |
 | `tests/` | Unit and end-to-end tests |

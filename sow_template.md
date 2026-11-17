@@ -45,7 +45,7 @@
 3. `GAME_START` (Server -> Clients): Game initiated (or resumed); assigns roles P1/P2 and a reconnect session token.
 4. `MOVE` (Client -> Server): Place a stone. The player types the move chess-style, a column letter `A`-`S` then a row number `1`-`19` with row 1 at the bottom (e.g. `J10` for the center), matching the letters and numbers printed around the board. The client converts it and sends integer `row`, `col` (0-18, row 0 at the top), so the wire format does not depend on how moves are typed.
 5. `STATE_UPDATE` (Server -> Clients): Broadcast board, captured pairs, turn number, active player, and game status.
-6. `ERROR` (Server -> Client): Invalid/out-of-turn move or malformed packet (15 defined error codes).
+6. `ERROR` (Server -> Client): Invalid/out-of-turn move or malformed packet (16 defined error codes; `TOURNAMENT_RULE` was added in Sprint 3).
 7. `DISCONNECT` (Client -> Server): Intentional quit, which forfeits immediately.
 8. `GAME_OVER` (Server -> Clients): WIN / FORFEIT notification (winner, win reason) with final board and captures.
 9. `RECONNECT` (Client -> Server): Rejoin an in-progress game within the 60-second grace period.

@@ -33,6 +33,31 @@ def in_bounds(row: int, col: int) -> bool:
     return 0 <= row < SIZE and 0 <= col < SIZE
 
 
+# Tournament rule (FSM spec §4 "Opening"): P1's first stone goes on the center
+# point, and P1's second stone goes on or outside the box drawn 3 points out
+# from the center. Turn numbers count moves already applied, so P1's first and
+# second moves are turns 0 and 2.
+CENTER = SIZE // 2          # (9, 9) = J10
+BOX_DISTANCE = 3            # the box: points exactly 3 steps from the center
+
+
+def center_distance(row: int, col: int) -> int:
+    """Steps from the center counting diagonals as one (0 at J10, 3 on the box)."""
+    return max(abs(row - CENTER), abs(col - CENTER))
+
+
+def opening_rule_error(turn_number: int, row: int, col: int) -> str | None:
+    """Why a move breaks the tournament rule, or None if it is allowed."""
+    if turn_number == 0 and (row, col) != (CENTER, CENTER):
+        return f"The first stone must go on the center point, {to_notation(CENTER, CENTER)}."
+    if turn_number == 2 and center_distance(row, col) < BOX_DISTANCE:
+        return (f"Your second stone must go on or outside the box "
+                f"({to_notation(CENTER + BOX_DISTANCE, CENTER - BOX_DISTANCE)} to "
+                f"{to_notation(CENTER - BOX_DISTANCE, CENTER + BOX_DISTANCE)}), "
+                f"at least {BOX_DISTANCE} points from the center.")
+    return None
+
+
 # Chess-style notation for people: a column letter A-S (left to right) then a
 # row number 1-19 (bottom to top), like an (x, y) point. "J10" is the center.
 # The wire protocol keeps 0-based (row, col) with row 0 at the top.

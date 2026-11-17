@@ -50,9 +50,13 @@ def types(msgs: list[dict]) -> list[str]:
 
 class FsmTestCase(unittest.TestCase):
     grace = 60
+    # Most tests check other rules and open wherever is convenient, so the
+    # opening rule is off here; TournamentRuleTests turns it on.
+    tournament_rule = False
 
     def setUp(self):
-        self.server = PenteServer(grace_period=self.grace)
+        self.server = PenteServer(grace_period=self.grace,
+                                  tournament_rule=self.tournament_rule)
 
     def tearDown(self):
         self.server.shutdown_all()
@@ -85,6 +89,58 @@ class FsmTestCase(unittest.TestCase):
         errors = [x for x in take(conn) if x["msg_type"] == "ERROR"]
         self.assertTrue(errors, "expected an ERROR")
         return errors[-1]["payload"]
+
+
+class TournamentRuleTests(FsmTestCase):
+    """G12: P1's first stone on the center, P1's second on or outside the box."""
+    tournament_rule = True
+
+    def assert_rejected(self, conn, pid, row, col, turn):
+        self.move(conn, pid, row, col)
+        err = self.last_error(conn)
+        self.assertEqual((err["code"], err["fatal"]), ("TOURNAMENT_RULE", False))
+        self.assertFalse(conn.close_requested)
+        self.assertEqual(self.server.game.turn_number, turn)       # same player keeps the turn
+        self.assertEqual(self.server.game.board.cells[row][col], ".")
+        return err
+
+    def assert_accepted(self, conn, pid, row, col, turn_after):
+        self.move(conn, pid, row, col)
+        self.assertEqual(self.server.game.turn_number, turn_after)
+        take(conn)
+
+    def test_first_stone_must_be_center(self):
+        p1, p2 = self.start_game()
+        err = self.assert_rejected(p1, "P1", 9, 10, turn=0)
+        self.assertIn("J10", err["detail"])
+        self.assert_rejected(p1, "P1", 0, 0, turn=0)
+        self.assert_accepted(p1, "P1", 9, 9, turn_after=1)
+
+    def test_second_stone_on_or_outside_box(self):
+        p1, p2 = self.start_game()
+        self.assert_accepted(p1, "P1", 9, 9, turn_after=1)
+        self.assert_accepted(p2, "P2", 9, 10, turn_after=2)    # P2 may play anywhere
+        for row, col in ((8, 8), (11, 7), (7, 11), (9, 7)):    # 1-2 steps from the center
+            self.assert_rejected(p1, "P1", row, col, turn=2)
+        self.assert_accepted(p1, "P1", 6, 6, turn_after=3)     # G13, a corner of the box
+        take(p2)
+
+    def test_box_edge_and_beyond_are_allowed(self):
+        for row, col in ((12, 9), (9, 12), (0, 0), (18, 9)):   # J7, M10, A19, J1
+            with self.subTest(point=(row, col)):
+                self.server.shutdown_all()
+                self.server = PenteServer(tournament_rule=True)   # a fresh game each time
+                p1, p2 = self.start_game()
+                self.assert_accepted(p1, "P1", 9, 9, turn_after=1)
+                self.assert_accepted(p2, "P2", 0, 18, turn_after=2)
+                self.assert_accepted(p1, "P1", row, col, turn_after=3)
+
+    def test_rule_ends_after_p1_second_stone(self):
+        p1, p2 = self.start_game()
+        for conn, pid, r, c, after in ((p1, "P1", 9, 9, 1), (p2, "P2", 9, 10, 2),
+                                       (p1, "P1", 6, 6, 3), (p2, "P2", 10, 9, 4)):
+            self.assert_accepted(conn, pid, r, c, after)
+        self.assert_accepted(p1, "P1", 8, 8, turn_after=5)     # inside the box is fine now
 
 
 class LobbyTests(FsmTestCase):

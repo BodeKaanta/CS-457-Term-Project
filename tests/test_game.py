@@ -138,5 +138,25 @@ class NotationTests(unittest.TestCase):
         self.assertEqual(to_notation(19, 5), "(row 19, col 5)")  # off the board
 
 
+class OpeningRuleTests(unittest.TestCase):
+    def test_first_move_center_only(self):
+        from pente.game import opening_rule_error
+        self.assertIsNone(opening_rule_error(0, 9, 9))
+        self.assertIn("J10", opening_rule_error(0, 9, 10))
+
+    def test_second_p1_move_on_or_outside_box(self):
+        from pente.game import opening_rule_error
+        self.assertIn("G7 to M13", opening_rule_error(2, 8, 8))
+        self.assertIsNotNone(opening_rule_error(2, 11, 11))    # 2 steps: inside
+        self.assertIsNone(opening_rule_error(2, 12, 12))       # 3 steps: on the box
+        self.assertIsNone(opening_rule_error(2, 6, 9))         # J13, box edge
+        self.assertIsNone(opening_rule_error(2, 0, 0))         # far outside
+
+    def test_other_turns_unrestricted(self):
+        from pente.game import opening_rule_error
+        for turn in (1, 3, 4, 10):
+            self.assertIsNone(opening_rule_error(turn, 9, 10))
+
+
 if __name__ == "__main__":
     unittest.main()
