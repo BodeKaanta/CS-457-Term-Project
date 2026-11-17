@@ -91,7 +91,7 @@ class LiveServerTests(unittest.TestCase):
 
     def test_two_clients_play_three_turns(self):
         alice, bob = self.start_game()
-        for who, pid, row, col in ((alice, "P1", 9, 9), (bob, "P2", 9, 10), (alice, "P1", 8, 8)):
+        for who, pid, row, col in ((alice, "P1", 9, 9), (bob, "P2", 9, 10), (alice, "P1", 6, 6)):
             who.send(m.make_move(pid, row, col))
             a = alice.expect("STATE_UPDATE")[0]["payload"]
             b = bob.expect("STATE_UPDATE")[0]["payload"]
@@ -132,12 +132,14 @@ class LiveServerTests(unittest.TestCase):
 
     def test_game_to_completion_then_lobby_reopens(self):
         alice, bob = self.start_game()
-        for i in range(4):
-            alice.send(m.make_move("P1", 9, i))
+        # Alice builds J10-N10. Her first stone is the center and her second
+        # (M10) is on the box, as the tournament rule requires.
+        for i, col in enumerate((9, 12, 10, 11)):
+            alice.send(m.make_move("P1", 9, col))
             alice.expect("STATE_UPDATE"), bob.expect("STATE_UPDATE")
             bob.send(m.make_move("P2", 0, i * 2))
             alice.expect("STATE_UPDATE"), bob.expect("STATE_UPDATE")
-        alice.send(m.make_move("P1", 9, 4))
+        alice.send(m.make_move("P1", 9, 13))
         for c in (alice, bob):
             msgs = c.expect("STATE_UPDATE", "GAME_OVER", "SCORE_UPDATE")
             self.assertEqual(msgs[1]["payload"]["winner"], "P1")

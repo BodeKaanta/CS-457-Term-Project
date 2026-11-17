@@ -224,6 +224,7 @@ Server validation order (the first failure wins and produces an `ERROR`, non-fat
 3. `row` and `col` present and are integers (not bool/float/string) → else `INVALID_PAYLOAD`
 4. `0 ≤ row, col ≤ 18` → else `OUT_OF_BOUNDS`
 5. `board[row][col] == "."` → else `CELL_OCCUPIED`
+6. Tournament rule (Sprint 3): on turn 0 the point is the center `(9, 9)`, and on turn 2 it is at least 3 points from the center → else `TOURNAMENT_RULE` (FSM spec §4 *Opening*)
 
 A valid move is applied, captures are resolved, win conditions are checked, and the result is broadcast as `STATE_UPDATE` (and `GAME_OVER` + `SCORE_UPDATE` if the game ended).
 
@@ -265,6 +266,7 @@ Sent **only** to the offending client. A non-fatal error never changes game stat
 | `NOT_YOUR_TURN` | no | `MOVE` from the non-active player |
 | `OUT_OF_BOUNDS` | no | `row`/`col` outside 0–18 |
 | `CELL_OCCUPIED` | no | Target intersection is not empty |
+| `TOURNAMENT_RULE` | no | P1's first stone is not on the center, or P1's second stone is fewer than 3 points from the center (added in Sprint 3) |
 | `GAME_NOT_ACTIVE` | no | `MOVE` while in lobby, paused, or finished |
 | `INVALID_ALIAS` | yes | Alias fails the format rules |
 | `ALIAS_TAKEN` | yes | Alias already used by the other connected player |

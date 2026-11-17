@@ -13,8 +13,8 @@ This log was recorded with the real `server.py` and two real `client.py` process
 | Client parses `-h`, `-i`, `-p`; server parses `-h`, `-p` and binds `0.0.0.0` | Section 1 (help output) and the first server log line (`listening on 0.0.0.0:5457`) |
 | Client resolves the server by DNS hostname, no hard-coded IP | `[INFO] Resolved localhost -> ...` at the top of each client console |
 | Client catches `socket.gaierror` and fails gracefully | Section 1: `server.kaanta.edu` does not resolve on this machine yet (DNS for that name is set up on router R1 in the Sprint 4 CML lab). The client prints the error and exits with status 1, with no traceback |
-| Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11) |
-| At least 3 turns of gameplay | 11 moves were played: a capture at move 5, an occupied cell and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
+| Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11, G12) |
+| At least 3 turns of gameplay | 11 moves were played: P1 opened on the center and her second stone was rejected inside the tournament-rule box (she kept the turn), a capture at move 5, an occupied point and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
 | CLI board, turn status, and score summaries | Section 3: the board with column letters A-S and row numbers 1-19, `>>> YOUR TURN` / `Waiting for Bob (P2) to move...`, live captures on every turn, then round points and the session leaderboard |
 
 ## 1. Command-line help and DNS failure
@@ -73,67 +73,72 @@ Please check your Cisco router DNS configuration ('ip dns server' / 'ip host') o
 Thread names are in brackets: `MainThread` accepts connections; `conn-1` (Alice) and `conn-2` (Bob) are the per-client handler threads. The thread that receives a move applies it and sends the update to both players.
 
 ```text
-23:23:24 [MainThread    ] INFO    Pente server listening on 0.0.0.0:5457 (Ctrl-C to stop)
-23:23:24 [MainThread    ] INFO    FSM INIT -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [server listening]
-23:23:24 [MainThread    ] INFO    Accepted conn-1 127.0.0.1:53358
-23:23:24 [MainThread    ] INFO    conn-1 127.0.0.1:53358 registered (1 open)
-23:23:24 [conn-1        ] INFO    FSM WAITING_FOR_PLAYERS/LOBBY_EMPTY -> WAITING_FOR_PLAYERS/ONE_PLAYER [L1 Alice seated as P1 (conn-1 127.0.0.1:53358)]
-23:23:24 [MainThread    ] INFO    Accepted conn-2 127.0.0.1:53359
-23:23:24 [MainThread    ] INFO    conn-2 127.0.0.1:53359 registered (2 open)
-23:23:24 [conn-2        ] INFO    FSM WAITING_FOR_PLAYERS/ONE_PLAYER -> GAME_START [L3 Bob seated as P2 (conn-2 127.0.0.1:53359)]
-23:23:24 [conn-2        ] INFO    Game 1: Alice (P1) vs Bob (P2)
-23:23:24 [conn-2        ] INFO    FSM GAME_START -> PLAYER_TURN [G1 P1 moves first]
-23:23:24 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE J10 (row 9, col 9)]
-23:23:24 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:24 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-23:23:25 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE K10 (row 9, col 10)]
-23:23:25 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:25 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-23:23:25 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE H12 (row 7, col 7)]
-23:23:25 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:25 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-23:23:26 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE L10 (row 9, col 11)]
-23:23:26 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:26 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-23:23:26 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE M10 (row 9, col 12)]
-23:23:26 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 1 pair(s) captured]
-23:23:26 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-23:23:26 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE J10 (row 9, col 9)]
-23:23:26 [conn-2        ] INFO    ERROR CELL_OCCUPIED -> conn-2 127.0.0.1:53359: J10 already has a stone.
-23:23:26 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G6 cell occupied, P2 keeps the turn]
-23:23:27 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE A19 (row 0, col 0)]
-23:23:27 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:27 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-23:23:28 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE I11 (row 8, col 8)]
-23:23:28 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:28 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-23:23:28 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (row 14, col 19)]
-23:23:28 [conn-2        ] INFO    ERROR OUT_OF_BOUNDS -> conn-2 127.0.0.1:53359: That point is off the board. Columns are A-S and rows are 1-19.
-23:23:28 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G5 out of bounds, P2 keeps the turn]
-23:23:28 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE B19 (row 0, col 1)]
-23:23:28 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:28 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-23:23:29 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE G13 (row 6, col 6)]
-23:23:29 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:29 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
-23:23:29 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE C19 (row 0, col 2)]
-23:23:29 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:29 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
-23:23:30 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE F14 (row 5, col 5)]
-23:23:30 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
-23:23:30 [conn-1        ] INFO    FSM CHECK_WIN -> GAME_OVER [G8 P1 wins: WIN FIVE_IN_A_ROW]
-23:23:30 [conn-1        ] INFO    Round 1 points: P1 Alice=6, P2 Bob=0
-23:23:30 [conn-1        ] INFO    FSM GAME_OVER -> CLEANUP [results sent]
-23:23:30 [conn-1        ] INFO    FSM CLEANUP -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [reset for the next game]
-23:23:30 [conn-2        ] INFO    conn-2 127.0.0.1:53359 handler exiting; the server closed it [X1]
-23:23:30 [conn-2        ] INFO    conn-2 127.0.0.1:53359 closed (1 open)
-23:23:30 [conn-1        ] INFO    conn-1 127.0.0.1:53358 handler exiting; the server closed it [X1]
-23:23:30 [conn-1        ] INFO    conn-1 127.0.0.1:53358 closed (0 open)
+23:31:08 [MainThread    ] INFO    Pente server listening on 0.0.0.0:5457 (Ctrl-C to stop)
+23:31:08 [MainThread    ] INFO    FSM INIT -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [server listening]
+23:31:09 [MainThread    ] INFO    Accepted conn-1 127.0.0.1:60925
+23:31:09 [MainThread    ] INFO    conn-1 127.0.0.1:60925 registered (1 open)
+23:31:09 [conn-1        ] INFO    FSM WAITING_FOR_PLAYERS/LOBBY_EMPTY -> WAITING_FOR_PLAYERS/ONE_PLAYER [L1 Alice seated as P1 (conn-1 127.0.0.1:60925)]
+23:31:09 [MainThread    ] INFO    Accepted conn-2 127.0.0.1:60926
+23:31:09 [MainThread    ] INFO    conn-2 127.0.0.1:60926 registered (2 open)
+23:31:09 [conn-2        ] INFO    FSM WAITING_FOR_PLAYERS/ONE_PLAYER -> GAME_START [L3 Bob seated as P2 (conn-2 127.0.0.1:60926)]
+23:31:09 [conn-2        ] INFO    Game 1: Alice (P1) vs Bob (P2)
+23:31:09 [conn-2        ] INFO    FSM GAME_START -> PLAYER_TURN [G1 P1 moves first]
+23:31:09 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE J10 (row 9, col 9)]
+23:31:09 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:09 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:31:09 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE K10 (row 9, col 10)]
+23:31:09 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:09 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:31:10 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE H12 (row 7, col 7)]
+23:31:10 [conn-1        ] INFO    ERROR TOURNAMENT_RULE -> conn-1 127.0.0.1:60925: Your second stone must go on or outside the box (G7 to M13), at least 3 points from the center.
+23:31:10 [conn-1        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G12 tournament rule, P1 keeps the turn]
+23:31:10 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE G13 (row 6, col 6)]
+23:31:10 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:10 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:31:11 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE L10 (row 9, col 11)]
+23:31:11 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:11 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:31:11 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE M10 (row 9, col 12)]
+23:31:11 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 1 pair(s) captured]
+23:31:11 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:31:12 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE J10 (row 9, col 9)]
+23:31:12 [conn-2        ] INFO    ERROR CELL_OCCUPIED -> conn-2 127.0.0.1:60926: J10 already has a stone.
+23:31:12 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G6 cell occupied, P2 keeps the turn]
+23:31:12 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE A19 (row 0, col 0)]
+23:31:12 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:12 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:31:13 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE H12 (row 7, col 7)]
+23:31:13 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:13 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:31:13 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE (row 14, col 19)]
+23:31:13 [conn-2        ] INFO    ERROR OUT_OF_BOUNDS -> conn-2 127.0.0.1:60926: That point is off the board. Columns are A-S and rows are 1-19.
+23:31:13 [conn-2        ] INFO    FSM EVALUATE_MOVE -> PLAYER_TURN [G5 out of bounds, P2 keeps the turn]
+23:31:14 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE B19 (row 0, col 1)]
+23:31:14 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:14 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:31:14 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE I11 (row 8, col 8)]
+23:31:14 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:14 [conn-1        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P2 to move]
+23:31:14 [conn-2        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P2 MOVE C19 (row 0, col 2)]
+23:31:14 [conn-2        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:14 [conn-2        ] INFO    FSM CHECK_WIN -> PLAYER_TURN [G11 no win, P1 to move]
+23:31:15 [conn-1        ] INFO    FSM PLAYER_TURN -> EVALUATE_MOVE [G2 P1 MOVE F14 (row 5, col 5)]
+23:31:15 [conn-1        ] INFO    FSM EVALUATE_MOVE -> CHECK_WIN [G7 stone placed, 0 pair(s) captured]
+23:31:15 [conn-1        ] INFO    FSM CHECK_WIN -> GAME_OVER [G8 P1 wins: WIN FIVE_IN_A_ROW]
+23:31:15 [conn-1        ] INFO    Round 1 points: P1 Alice=6, P2 Bob=0
+23:31:15 [conn-1        ] INFO    FSM GAME_OVER -> CLEANUP [results sent]
+23:31:15 [conn-1        ] INFO    FSM CLEANUP -> WAITING_FOR_PLAYERS/LOBBY_EMPTY [reset for the next game]
+23:31:15 [conn-2        ] INFO    conn-2 127.0.0.1:60926 handler exiting; the server closed it [X1]
+23:31:15 [conn-2        ] INFO    conn-2 127.0.0.1:60926 closed (1 open)
+23:31:15 [conn-1        ] INFO    conn-1 127.0.0.1:60925 handler exiting; the server closed it [X1]
+23:31:15 [conn-1        ] INFO    conn-1 127.0.0.1:60925 closed (0 open)
 ```
 
 ## 3. Client consoles
 
 ### Alice (P1, `X`): connecting, waiting, and the first three turns
+
+Alice's first stone must go on the center point (the prompt reminds her). Her second stone, `H12`, is only 2 points from the center, inside the box, so the server rejects it with `TOURNAMENT_RULE` and she keeps the turn. `G13`, a corner of the box, is accepted.
 
 ```text
 [INFO] Resolved localhost -> 127.0.0.1
@@ -174,6 +179,7 @@ Session leaderboard: no finished games yet.
 Turn 0 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > J10
+    Tournament rule: your first stone goes on the center point, J10.
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -225,6 +231,11 @@ Turn 2 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
 Last move: Bob (O) at K10
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > H12
+    Tournament rule: your second stone goes on or outside the box (G7 to M13).
+[SERVER] Rejected - TOURNAMENT_RULE: Your second stone must go on or outside the box (G7 to M13), at least 3 points from the center.
+>>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
+> G13
+    Tournament rule: your second stone goes on or outside the box (G7 to M13).
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -233,8 +244,8 @@ Last move: Bob (O) at K10
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂─[X]─┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼─[X]━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──O──┼──╂──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -248,7 +259,7 @@ Last move: Bob (O) at K10
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 3 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
-Last move: Alice (X) at H12
+Last move: Alice (X) at G13
 Waiting for Bob (P2) to move...
 ```
 
@@ -266,8 +277,8 @@ Bob's stones at `K10` and `L10` sit between Alice's `J10` and her new stone at `
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼─[X]─┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -389,6 +400,7 @@ Session leaderboard: no finished games yet.
 Turn 0 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > J10
+    Tournament rule: your first stone goes on the center point, J10.
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -440,6 +452,11 @@ Turn 2 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
 Last move: Bob (O) at K10
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > H12
+    Tournament rule: your second stone goes on or outside the box (G7 to M13).
+[SERVER] Rejected - TOURNAMENT_RULE: Your second stone must go on or outside the box (G7 to M13), at least 3 points from the center.
+>>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
+> G13
+    Tournament rule: your second stone goes on or outside the box (G7 to M13).
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  ┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -448,8 +465,8 @@ Last move: Bob (O) at K10
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂─[X]─┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼─[X]━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──O──┼──╂──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -463,7 +480,7 @@ Last move: Bob (O) at K10
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 3 | You: Alice (X) captures 0/5 | Bob (O) captures 0/5
-Last move: Alice (X) at H12
+Last move: Alice (X) at G13
 Waiting for Bob (P2) to move...
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
@@ -473,8 +490,8 @@ Waiting for Bob (P2) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──O─[O]─╂──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -499,8 +516,8 @@ Last move: Bob (O) at L10
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼─[X]─┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -524,8 +541,8 @@ Waiting for Bob (P2) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -544,7 +561,7 @@ Last move: Bob (O) at A19
 > hello
 [INPUT] Type a move as a column letter A-S and a row number 1-19 (e.g. J10), or 'help'.
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
-> I11
+> H12
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  O──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -553,9 +570,9 @@ Last move: Bob (O) at A19
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼─[X]─┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂─[X]─┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -568,7 +585,7 @@ Last move: Bob (O) at A19
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 7 | You: Alice (X) captures 1/5 | Bob (O) captures 0/5
-Last move: Alice (X) at I11
+Last move: Alice (X) at H12
 Waiting for Bob (P2) to move...
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
@@ -578,9 +595,9 @@ Waiting for Bob (P2) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
  12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼──X──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -595,7 +612,7 @@ Waiting for Bob (P2) to move...
 Turn 8 | You: Alice (X) captures 1/5 | Bob (O) captures 0/5
 Last move: Bob (O) at B19
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
-> G13
+> I11
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
  19  O──O──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐  19
@@ -604,9 +621,9 @@ Last move: Bob (O) at B19
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼─[X]━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
  12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼──X──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 11  ├──┼──┼──┼──┼──┼──╂──┼─[X]─┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -619,7 +636,7 @@ Last move: Bob (O) at B19
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 9 | You: Alice (X) captures 1/5 | Bob (O) captures 0/5
-Last move: Alice (X) at G13
+Last move: Alice (X) at I11
 Waiting for Bob (P2) to move...
 
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
@@ -788,8 +805,8 @@ Waiting for Alice (P1) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂─[X]─┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼─[X]━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──O──┼──╂──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -803,7 +820,7 @@ Waiting for Alice (P1) to move...
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 3 | You: Bob (O) captures 0/5 | Alice (X) captures 0/5
-Last move: Alice (X) at H12
+Last move: Alice (X) at G13
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > L10
 
@@ -814,8 +831,8 @@ Last move: Alice (X) at H12
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──O─[O]─╂──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -839,8 +856,8 @@ Waiting for Alice (P1) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼─[X]─┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -868,8 +885,8 @@ Last move: Alice (X) at M10 and captured 1 pair (L10, K10)
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
  11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
@@ -893,9 +910,9 @@ Waiting for Alice (P1) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
- 12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼─[X]─┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 12  ├──┼──┼──┼──┼──┼──╂─[X]─┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
+ 11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -908,7 +925,7 @@ Waiting for Alice (P1) to move...
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 7 | You: Bob (O) captures 0/5 | Alice (X) captures 1/5
-Last move: Alice (X) at I11
+Last move: Alice (X) at H12
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > T5
 [SERVER] Rejected - OUT_OF_BOUNDS: That point is off the board. Columns are A-S and rows are 1-19.
@@ -922,9 +939,9 @@ Last move: Alice (X) at I11
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼──╆━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
  12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼──X──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 11  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -947,9 +964,9 @@ Waiting for Alice (P1) to move...
  16  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  16
  15  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  15
  14  ├──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┼──┤  14
- 13  ├──┼──┼──┼──┼──┼─[X]━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
+ 13  ├──┼──┼──┼──┼──┼──X━━┿━━┿━━┿━━┿━━┿━━╅──┼──┼──┼──┼──┼──┤  13
  12  ├──┼──┼──┼──┼──┼──╂──X──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  12
- 11  ├──┼──┼──┼──┼──┼──╂──┼──X──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
+ 11  ├──┼──┼──┼──┼──┼──╂──┼─[X]─┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  11
  10  ├──┼──┼──┼──┼──┼──╂──┼──┼──X──┼──┼──X──┼──┼──┼──┼──┼──┤  10
   9  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  9
   8  ├──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──╂──┼──┼──┼──┼──┼──┤  8
@@ -962,7 +979,7 @@ Waiting for Alice (P1) to move...
   1  └──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘  1
      A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  P  Q  R  S 
 Turn 9 | You: Bob (O) captures 0/5 | Alice (X) captures 1/5
-Last move: Alice (X) at G13
+Last move: Alice (X) at I11
 >>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'.
 > C19
 

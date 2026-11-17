@@ -38,12 +38,12 @@ MSG_TYPES = frozenset({
 })
 CLIENT_MSG_TYPES = frozenset({CONNECT, MOVE, DISCONNECT, RECONNECT})
 
-# Blueprint §3.6: the 15 error codes (closed set) and which ones are fatal.
+# Blueprint §3.6: the 16 error codes (closed set) and which ones are fatal.
 ERROR_CODES = frozenset({
     "MALFORMED_JSON", "MISSING_FIELD", "UNKNOWN_MSG_TYPE", "INVALID_PAYLOAD",
     "PLAYER_ID_MISMATCH", "NOT_YOUR_TURN", "OUT_OF_BOUNDS", "CELL_OCCUPIED",
     "GAME_NOT_ACTIVE", "INVALID_ALIAS", "ALIAS_TAKEN", "ROOM_FULL",
-    "VERSION_MISMATCH", "INVALID_TOKEN", "FRAME_TOO_LARGE",
+    "VERSION_MISMATCH", "INVALID_TOKEN", "FRAME_TOO_LARGE", "TOURNAMENT_RULE",
 })
 FATAL_CODES = frozenset({
     "INVALID_ALIAS", "ALIAS_TAKEN", "ROOM_FULL", "VERSION_MISMATCH",

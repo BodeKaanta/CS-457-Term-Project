@@ -32,11 +32,13 @@ PROMPT = ">>> YOUR TURN"
 
 # Each entry is typed when that client shows ">>> YOUR TURN". Rejected or
 # unparseable entries re-print the prompt, so the next entry follows them.
-# The game: Bob's pair at K10-L10 is captured by Alice's M10, then Alice
-# completes the diagonal F14-J10 for five in a row. Bob's J10 (occupied) and
-# T5 (column T is off the board) are rejected by the server.
+# The game: Alice opens on the center (J10). Her second stone H12 is inside
+# the tournament-rule box and is rejected, so she plays G13 on the box. Bob's
+# pair at K10-L10 is captured by Alice's M10, then Alice completes the
+# diagonal F14-J10 for five in a row. Bob's J10 (occupied) and T5 (column T is
+# off the board) are rejected by the server.
 SCRIPT = {
-    "Alice": ["J10", "H12", "M10", "hello", "I11", "G13", "F14"],
+    "Alice": ["J10", "H12", "G13", "M10", "hello", "H12", "I11", "F14"],
     "Bob": ["K10", "L10", "J10", "A19", "T5", "B19", "C19"],
 }
 
@@ -130,8 +132,8 @@ This log was recorded with the real `server.py` and two real `client.py` process
 | Client parses `-h`, `-i`, `-p`; server parses `-h`, `-p` and binds `0.0.0.0` | Section 1 (help output) and the first server log line (`listening on 0.0.0.0:{port}`) |
 | Client resolves the server by DNS hostname, no hard-coded IP | `[INFO] Resolved {host} -> ...` at the top of each client console |
 | Client catches `socket.gaierror` and fails gracefully | Section 1: `server.kaanta.edu` does not resolve on this machine yet (DNS for that name is set up on router R1 in the Sprint 4 CML lab). The client prints the error and exits with status 1, with no traceback |
-| Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11) |
-| At least 3 turns of gameplay | 11 moves were played: a capture at move 5, an occupied cell and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
+| Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11, G12) |
+| At least 3 turns of gameplay | 11 moves were played: P1 opened on the center and her second stone was rejected inside the tournament-rule box (she kept the turn), a capture at move 5, an occupied point and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
 | CLI board, turn status, and score summaries | Section 3: the board with column letters A-S and row numbers 1-19, `>>> YOUR TURN` / `Waiting for Bob (P2) to move...`, live captures on every turn, then round points and the session leaderboard |
 
 ## 1. Command-line help and DNS failure
@@ -147,6 +149,8 @@ Thread names are in brackets: `MainThread` accepts connections; `conn-1` (Alice)
 ## 3. Client consoles
 
 ### Alice (P1, `X`): connecting, waiting, and the first three turns
+
+Alice's first stone must go on the center point (the prompt reminds her). Her second stone, `H12`, is only 2 points from the center, inside the box, so the server rejects it with `TOURNAMENT_RULE` and she keeps the turn. `G13`, a corner of the box, is accepted.
 
 {block(alice_start)}
 
