@@ -6,8 +6,6 @@
 **Server name:** `server.kaanta.edu` → `192.168.20.100`
 **Files:** [`sprint_4_topology.yaml`](sprint_4_topology.yaml) (CML export) · [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) (DNS capture) · [`cml/R1.cfg`](cml/R1.cfg) (router configuration)
 
-<!-- TODO before submitting: replace every "TODO" block below with real output or a screenshot, then delete this comment. Step-by-step instructions: cml/LAB_GUIDE.md -->
-
 ## Summary
 
 One Cisco IOSv router, **R1** (CML node `bk-R1`), connects three subnets: Client 1, Client 2, and the game server. R1 is each subnet's default gateway. It leases addresses to the two clients from two DHCP pools, and it answers DNS queries for `server.kaanta.edu` from its own host table. The server has the static address 192.168.20.100 with R1 as its default gateway. Both clients reach the server across the router, and the DNS capture shows `server.kaanta.edu` resolving to 192.168.20.100. That lookup is what the Pente client (`client.py -i server.kaanta.edu`) depends on in Sprint 5.
@@ -111,11 +109,9 @@ R1 chooses the pool from the interface the DHCP Discover arrives on. A Discover 
 
 ### `show ip dhcp binding`
 
-**TODO (paste):** run this after both clients have their leases (§5). One binding should be on Gi0/1 (192.168.10.x) and one on Gi0/2 (192.168.11.x).
+![R1 show ip dhcp binding](docs/sprint_4/r1_dhcp_binding.png)
 
-```text
-TODO
-```
+Two active **Automatic** (dynamic) leases, one from each pool: **192.168.10.2** from `CLIENT1_POOL` and **192.168.11.2** from `CLIENT2_POOL`. The client IDs identify the clients by MAC address: `0152.5400.4e45.be` is bk-Client1's eth0 (`52:54:00:4e:45:be`) and `0152.5400.4ce4.d5` is bk-Client2's eth0 (`52:54:00:4c:e4:d5`), as §5 shows. The leading `01` means Ethernet.
 
 ### `show hosts` (extra, supports §2.2)
 
@@ -155,63 +151,40 @@ cat /etc/resolv.conf
 
 These show the three things DHCP delivered: the leased **address**, the **default route** via the client's gateway, and R1 as the **DNS server**.
 
-### bk-Client1 (Subnet A)
+bk-Client1 (left) and bk-Client2 (right):
 
-**TODO (paste):** the output of the commands above.
+![Client DHCP leases](docs/sprint_4/clients_dhcp.png)
 
-```text
-TODO
-```
+| | bk-Client1 (Subnet A) | bk-Client2 (Subnet B) |
+|---|---|---|
+| Leased address (`ip addr show eth0`) | **192.168.10.2/24** | **192.168.11.2/24** |
+| Default gateway (`ip route`, DHCP option 3) | **default via 192.168.10.1** | **default via 192.168.11.1** |
+| DNS server (`/etc/resolv.conf`, DHCP option 6) | **nameserver 192.168.10.1** | **nameserver 192.168.11.1** |
+| MAC address (matches §3 `show ip dhcp binding`) | 52:54:00:4e:45:be | 52:54:00:4c:e4:d5 |
 
-### bk-Client2 (Subnet B)
-
-**TODO (paste):** the output of the commands above.
-
-```text
-TODO
-```
+The clients already held their leases when these commands ran. The `udhcpc: socket(...): Operation not permitted` lines are from running `udhcpc` without `sudo`, which only root can do; they did not change the existing leases. The `metric 202` on the default route shows it was installed by the DHCP client.
 
 ## 6. Connectivity: clients ping the game server
 
 `ping -c 4 192.168.20.100` from each client. The packets cross R1 from Subnet A or B into Subnet C, and the replies come back through the server's default gateway.
 
-### bk-Client1 → bk-Server
+bk-Client1 (left) and bk-Client2 (right):
 
-**TODO (paste):** should end with `0% packet loss`.
+![Clients ping the game server](docs/sprint_4/clients_ping.png)
 
-```text
-TODO
-```
-
-### bk-Client2 → bk-Server
-
-**TODO (paste):** should end with `0% packet loss`.
-
-```text
-TODO
-```
+Both clients: **4 packets transmitted, 4 packets received, 0% packet loss**. Average round trip: 3.9 ms from Client 1 and 3.6 ms from Client 2.
 
 ## 7. DNS resolution from the clients
 
 `nslookup server.kaanta.edu` on each client. The client sends the query to the DNS server it learned from DHCP (its own gateway on R1), and R1 answers from its host table.
 
-BusyBox `nslookup` on Alpine looks up both the IPv4 (A) and the IPv6 (AAAA) address. The A answer is `192.168.20.100`. R1 has no IPv6 address for the server, so the AAAA lookup comes back empty and `nslookup` adds the line `*** Can't find server.kaanta.edu: No answer`. That line is about IPv6 only and is expected.
+BusyBox `nslookup` on Alpine looks up both the IPv4 (A) and the IPv6 (AAAA) address. The A answer is `192.168.20.100`. R1 has no IPv6 address for the server, so the AAAA answer is empty. Before `ip dns primary` was added (§2.2), `nslookup` printed "Non-authoritative answer" and `*** Can't find server.kaanta.edu: No answer` for that empty IPv6 reply. With R1 authoritative, neither line appears.
 
-### bk-Client1
+bk-Client1 (left) and bk-Client2 (right):
 
-**TODO (paste):** `Server: 192.168.10.1` … `Name: server.kaanta.edu` / `Address: 192.168.20.100` (with no "Non-authoritative answer" line, since `ip dns primary` was added).
+![nslookup on both clients](docs/sprint_4/clients_nslookup.png)
 
-```text
-TODO
-```
-
-### bk-Client2
-
-**TODO (paste):** `Server: 192.168.11.1` … `Address: 192.168.20.100`.
-
-```text
-TODO
-```
+Each client asks its own gateway, the DNS server from DHCP: Client 1 asks `192.168.10.1:53` and Client 2 asks `192.168.11.1:53`. Both get **`server.kaanta.edu` → `192.168.20.100`**.
 
 ## 8. Wireshark DNS capture (`sprint_4_dns_lookup.pcap`)
 
