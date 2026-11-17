@@ -12,13 +12,15 @@
 
 One Cisco IOSv router, **R1** (CML node `bk-R1`), connects three subnets: Client 1, Client 2, and the game server. R1 is each subnet's default gateway. It leases addresses to the two clients from two DHCP pools, and it answers DNS queries for `server.kaanta.edu` from its own host table. The server has the static address 192.168.20.100 with R1 as its default gateway. Both clients reach the server across the router, and the DNS capture shows `server.kaanta.edu` resolving to 192.168.20.100. That lookup is what the Pente client (`client.py -i server.kaanta.edu`) depends on in Sprint 5.
 
-| Acceptance criterion | Evidence |
+Where to find the evidence for each rubric criterion:
+
+| Rubric criterion (50 pts each) | Evidence |
 |---|---|
-| Single router R1 connects Client 1 (192.168.10.0/24), Client 2 (192.168.11.0/24), and the server (192.168.20.0/24) | §1 topology, §3 `show ip interface brief` and `show ip route` |
-| R1 issues IP addresses, default gateways, and DNS server IPs through separate DHCP pools | §2.3 configuration, §3 `show ip dhcp binding`, §5 client leases |
-| Server has static 192.168.20.100/24 with default gateway 192.168.20.1 | §4 |
-| Both clients ping the server across subnets with no packet loss | §6 |
-| DNS resolution of `server.kaanta.edu` returns 192.168.20.100 (pcap and screenshots) | §7, §8 |
+| 1. Single-router multi-subnet architecture and addressing: `ip routing`; Gi0/1, Gi0/2, Gi0/3 on 192.168.10.1/24, 192.168.11.1/24, 192.168.20.1/24, all up/up with connected routes; server static 192.168.20.100/24 with default route via 192.168.20.1 | §1 topology, §2.1 configuration, §3 `show ip interface brief` and `show ip route`, §4 server |
+| 2. DHCP multi-subnet allocation: `CLIENT1_POOL` and `CLIENT2_POOL`, gateways excluded, default router and DNS server in each pool, active leases for both clients | §2.3 configuration, §3 `show ip dhcp binding`, §5 client leases |
+| 3. Authoritative DNS: `ip dns server` and `ip host server.kaanta.edu 192.168.20.100`; `nslookup` resolves on both clients | §2.2 configuration, §3 `show hosts`, §7 `nslookup` on both clients |
+| 4. Cross-subnet connectivity and DNS capture: zero-loss pings from both clients; annotated capture of the client query to R1 (UDP 53) and R1's response with 192.168.20.100, taken on the Client 1 link | §6 pings, §8 and [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) (every DNS packet carries a Wireshark comment) |
+| 5. CML export and this report: `sprint_4_topology.yaml` with `bk-R1`, `bk-Client1`, `bk-Client2`, `bk-Server`; topology screenshot, router outputs, client `ping`/`nslookup` logs, annotated Wireshark screenshot | [`sprint_4_topology.yaml`](sprint_4_topology.yaml), §1, §3, §5–§7, §8 |
 
 ---
 
@@ -221,13 +223,15 @@ TODO
 
 **How it was captured:** a CML packet capture on the link between `bk-R1` Gi0/1 and `bk-Client1` eth0, running while `nslookup server.kaanta.edu` ran on `bk-Client1`.
 
-**TODO (screenshot):** Wireshark with display filter `dns`, the response packet selected, and *Answers* expanded → save as `docs/sprint_4/wireshark_dns.png`
+**Annotations:** every DNS packet in [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) carries a Wireshark packet comment explaining it, and the file has a capture comment saying where and how it was captured. In Wireshark, a packet's comment appears at the top of its details pane under *Packet comments*, and *Statistics → Capture File Properties* lists them all. The comments were added with `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`, which copies the raw CML capture unchanged (same packets, same timestamps) and adds the comments. The file is stored in pcapng format, because the classic pcap format cannot hold comments; Wireshark opens it normally.
+
+**TODO (screenshot):** Wireshark with display filter `dns`, the response packet selected, and both *Packet comments* and *Domain Name System (response) → Answers* expanded → save as `docs/sprint_4/wireshark_dns.png`
 
 ![Wireshark DNS query and response](docs/sprint_4/wireshark_dns.png)
 
 ### Annotated exchange
 
-**TODO (paste):** output of `python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap`. It lists every DNS packet in the capture and annotates the query and the response (frame numbers, ports, transaction ID, flags, and the answer), and should end with `PASS`.
+**TODO (paste):** output of `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`. It lists every DNS packet in the capture and annotates the query and the response (frame numbers, ports, transaction ID, flags, and the answer), and should end with `PASS`.
 
 ```text
 TODO
@@ -255,8 +259,8 @@ The Pente client resolves the server with `socket.gethostbyname("server.kaanta.e
 | File | What it is |
 |---|---|
 | [`sprint_4_topology.yaml`](sprint_4_topology.yaml) | CML lab exported after the configurations were saved and extracted |
-| [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) | Raw capture of the DNS query and response |
+| [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) | Capture of the DNS query and response, with a Wireshark comment on every DNS packet (pcapng format) |
 | [`sprint_4_network_report.md`](sprint_4_network_report.md) | This report |
 | [`cml/R1.cfg`](cml/R1.cfg) | R1's configuration, commented |
 | [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml) | Ready-to-import lab used to build the topology (generated by `tools/build_cml_lab.py`) |
-| [`tools/dns_pcap_report.py`](tools/dns_pcap_report.py) | Reads the capture and produces the annotated table in §8 |
+| [`tools/dns_pcap_report.py`](tools/dns_pcap_report.py) | Checks the capture, produces the annotated table in §8, and writes the commented capture |

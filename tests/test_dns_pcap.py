@@ -124,6 +124,55 @@ class DnsPcapReportTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("[ERROR]", out)
 
+    def annotate(self, data: bytes, twice: bool = False):
+        """Run --annotate; return (exit code, output, packets read back from the copy)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst = Path(tmp) / "raw.pcap", Path(tmp) / "sprint_4_dns_lookup.pcap"
+            src.write_bytes(data)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = dpr.main([str(src), "--annotate", str(dst)])
+                if twice:
+                    dpr.main([str(dst), "--annotate", str(dst)])
+            packets = dpr.read_capture(str(dst)) if dst.exists() else None
+            raw = dst.read_bytes() if dst.exists() else b""
+        return code, out.getvalue(), packets, raw
+
+    def test_annotate_writes_comments_and_keeps_packets(self):
+        for build in (pcap, pcapng):
+            with self.subTest(fmt=build.__name__):
+                frames = lookup_frames()
+                original = dpr.read_capture_bytes(build(frames))
+                code, out, packets, raw = self.annotate(build(frames))
+                self.assertEqual(code, 0, out)
+                self.assertIn("4 packet comments", out)
+                self.assertEqual(struct.unpack("<I", raw[:4])[0], 0x0A0D0D0A)  # pcapng
+                self.assertEqual([p.data for p in packets], frames)
+                self.assertEqual([p.ts_ns for p in packets], [p.ts_ns for p in original])
+                self.assertEqual(packets[0].comments, [])                # ICMP: no comment
+                self.assertIn("DNS STANDARD QUERY (client -> R1)", packets[1].comments[0])
+                self.assertIn("A 192.168.20.100", packets[3].comments[0])
+                self.assertIn("AA = authoritative", packets[3].comments[0])
+                self.assertIn("same transaction ID 0x1a2b as frame 2", packets[3].comments[0])
+                self.assertIn("AAAA", packets[2].comments[0])
+                self.assertIn(b"Frame 2 is the query and frame 4", raw)  # file comment
+
+    def test_annotate_twice_does_not_duplicate(self):
+        _, _, packets, _ = self.annotate(pcap(lookup_frames()), twice=True)
+        self.assertEqual([len(p.comments) for p in packets], [0, 1, 1, 1, 1])
+
+    def test_annotate_refuses_without_lookup(self):
+        code, out, packets, _ = self.annotate(pcap(lookup_frames(answer_ip="10.9.9.9")))
+        self.assertEqual(code, 1)
+        self.assertIn("Not writing", out)
+        self.assertIsNone(packets)
+
+    def test_nanosecond_pcap_timestamps_are_exact(self):
+        data = bytearray(pcap(lookup_frames()))
+        data[:4] = struct.pack("<I", 0xA1B23C4D)                      # nanosecond pcap
+        packets = dpr.read_capture_bytes(bytes(data))
+        self.assertEqual(packets[1].ts_ns, 1_790_000_000 * 10**9 + 1000)
+
     def test_compression_loop_is_rejected(self):
         msg = struct.pack("!HHHHHH", 1, 0, 1, 0, 0, 0) + b"\xc0\x0c"
         with self.assertRaises(ValueError):

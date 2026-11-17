@@ -142,23 +142,25 @@ If every ping fails:
    Address:   192.168.20.100
    ```
 
-3. **Stop** the capture and **download** it. Save it in the repository root as **`sprint_4_dns_lookup.pcap`**. If CML gives you a `.pcapng`, open it in Wireshark and use *File → Save As → "Wireshark/tcpdump/... - pcap"*.
+3. **Stop** the capture and **download** it. Save it in the repository root as **`dns_raw.pcap`** (or `dns_raw.pcapng`, whichever CML gives you). This is the raw capture; Step 5 turns it into the deliverable. `dns_raw.*` is in `.gitignore`.
 4. Run `nslookup server.kaanta.edu` on `bk-Client2` as well, for the report. No capture is needed for this one.
-5. On this PC, check and annotate the capture:
+5. On this PC, check the capture and write the **annotated** deliverable:
 
    ```bash
-   python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap
+   python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap
    ```
 
-   It prints a table of every DNS packet and a written explanation of the query and the response, and ends with `PASS` if the capture shows `server.kaanta.edu` answered with `192.168.20.100`. Paste its output into report §8.
-6. **Wireshark screenshot:** open the pcap in Wireshark, apply the display filter `dns`, click the **response** packet, and expand *Domain Name System (response) → Answers* so `server.kaanta.edu: type A, class IN, addr 192.168.20.100` is visible. Save the screenshot as `docs/sprint_4/wireshark_dns.png`.
+   This does two things. It prints a table of every DNS packet and a written explanation of the query and the response, ending with `PASS` if the capture shows `server.kaanta.edu` answered with `192.168.20.100`; paste that output into report §8. It also writes **`sprint_4_dns_lookup.pcap`**: the same packets, byte for byte with the same timestamps, plus a **Wireshark packet comment on every DNS packet** and a comment on the capture file. The rubric gives only partial credit for a capture "missing annotations", so this file is the one to commit.
+
+   The file is in **pcapng** format even though the required name ends in `.pcap`, because the classic pcap format cannot store comments. Wireshark identifies the format from the file's contents, not its name, so it opens normally and shows the comments.
+6. **Annotated Wireshark screenshot:** open `sprint_4_dns_lookup.pcap` in Wireshark and apply the display filter `dns`. Click the **response** packet. In the details pane, expand **Packet comments** (at the top) and *Domain Name System (response) → Answers*, so both the comment and `server.kaanta.edu: type A, class IN, addr 192.168.20.100` are visible. Save the screenshot as `docs/sprint_4/wireshark_dns.png`. For extra clarity, you can draw labels on it in Snipping Tool (e.g. "query", "response", "answer 192.168.20.100"). Optionally, also save `docs/sprint_4/wireshark_dns_query.png` with the **query** packet selected and its comment expanded.
 
 If `nslookup` fails:
 - `cat /etc/resolv.conf` must say `nameserver 192.168.10.1`. If not, run `udhcpc` again.
 - On R1, `show hosts` must list the name.
 - `show running-config | include dns|domain` must show `ip dns server`, and must **not** show `no ip domain lookup`.
 
-> Note: a `.pcap` file cannot store Wireshark packet comments. The annotation therefore lives in the report (§8). If you also want the comments inside a capture, add them in Wireshark (right-click packet → *Packet Comment*) and save a separate `sprint_4_dns_lookup_annotated.pcapng`.
+> To see every comment at once in Wireshark: *Statistics → Capture File Properties* lists the capture comment and all packet comments. You can also add or edit a comment by hand: right-click a packet → *Packet Comments*, then save in pcapng format.
 
 ## Step 7. Topology screenshot
 

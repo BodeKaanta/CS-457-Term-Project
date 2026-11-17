@@ -219,3 +219,6 @@ __marimo__/
 
 # Pente client rejoin files (one per alias)
 .pente_session_*.json
+
+# Sprint 4: raw CML capture (the annotated copy sprint_4_dns_lookup.pcap is the deliverable)
+dns_raw.*

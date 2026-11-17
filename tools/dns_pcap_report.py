@@ -6,9 +6,12 @@ every DNS message over UDP port 53, pairs each query with its response, and
 prints a Markdown table plus a plain-English annotation of the exchange for
 the network report. It also checks that the capture shows the required
 lookup: a query for the server name answered with the expected address.
+With --annotate it also writes a copy of the capture with a Wireshark
+comment on every DNS packet (pcapng format; see write_pcapng).
 
 Usage (from the repository root):
     python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap
+    python tools/dns_pcap_report.py cml_capture.pcap --annotate sprint_4_dns_lookup.pcap
     python tools/dns_pcap_report.py capture.pcapng --name server.kaanta.edu --ip 192.168.20.100
 
 Exit status: 0 if the required query and answer were found, 1 if not, 2 if
@@ -46,14 +49,25 @@ class CaptureError(Exception):
 @dataclass
 class Packet:
     number: int          # 1-based, like Wireshark's "No." column
-    time: float          # seconds since the epoch
+    ts_ns: int           # capture time, nanoseconds since the epoch (exact)
     linktype: int
     data: bytes
+    orig_len: int = 0    # length on the wire (data may be truncated by the snaplen)
+    comments: list[str] = field(default_factory=list)  # pcapng packet comments
+
+    @property
+    def time(self) -> float:
+        """Capture time in seconds since the epoch."""
+        return self.ts_ns / 1e9
 
 
 def read_capture(path: str) -> list[Packet]:
     with open(path, "rb") as f:
-        raw = f.read()
+        return read_capture_bytes(f.read())
+
+
+def read_capture_bytes(raw: bytes) -> list[Packet]:
+    """Parse a whole pcap or pcapng file that is already in memory."""
     if len(raw) < 24:
         raise CaptureError("file is too short to be a capture")
     if raw[:4] == b"\x0a\x0d\x0d\x0a":
@@ -67,20 +81,21 @@ def _read_pcap(raw: bytes) -> list[Packet]:
     if raw[:4] not in magics:
         raise CaptureError("not a pcap or pcapng file (unknown magic number)")
     endian, tick = magics[raw[:4]]
+    ns_per_frac = 1000 if tick == 1e-6 else 1
     linktype = struct.unpack(endian + "I", raw[20:24])[0] & 0x0FFFFFFF
     packets, offset = [], 24
     while offset + 16 <= len(raw):
-        sec, frac, caplen, _ = struct.unpack(endian + "IIII", raw[offset:offset + 16])
+        sec, frac, caplen, orig = struct.unpack(endian + "IIII", raw[offset:offset + 16])
         offset += 16
-        packets.append(Packet(len(packets) + 1, sec + frac * tick, linktype,
-                              raw[offset:offset + caplen]))
+        packets.append(Packet(len(packets) + 1, sec * 10**9 + frac * ns_per_frac, linktype,
+                              raw[offset:offset + caplen], orig))
         offset += caplen
     return packets
 
 
 def _read_pcapng(raw: bytes) -> list[Packet]:
     packets: list[Packet] = []
-    interfaces: list[tuple[int, float]] = []  # (linktype, seconds per timestamp unit)
+    interfaces: list[tuple[int, tuple[int, int]]] = []  # (linktype, if_tsresol base/exponent)
     endian, offset = "<", 0
     while offset + 12 <= len(raw):
         if raw[offset:offset + 4] == b"\x0a\x0d\x0d\x0a":  # Section Header Block
@@ -95,21 +110,47 @@ def _read_pcapng(raw: bytes) -> list[Packet]:
             interfaces.append((linktype, _if_tsresol(body[8:], endian)))
         elif btype in (6, 2):  # Enhanced Packet Block / obsolete Packet Block
             if btype == 6:
-                iface, ts_hi, ts_lo, caplen = struct.unpack(endian + "IIII", body[0:16])
+                iface, ts_hi, ts_lo, caplen, orig = struct.unpack(endian + "IIIII", body[0:20])
             else:
-                iface, _drops, ts_hi, ts_lo, caplen = struct.unpack(endian + "HHIII", body[0:16])
-            linktype, unit = interfaces[iface] if iface < len(interfaces) else (1, 1e-6)
-            packets.append(Packet(len(packets) + 1, ((ts_hi << 32) | ts_lo) * unit,
-                                  linktype, body[20:20 + caplen]))
+                iface, _drops, ts_hi, ts_lo, caplen, orig = struct.unpack(endian + "HHIIII",
+                                                                         body[0:20])
+            linktype, resol = interfaces[iface] if iface < len(interfaces) else (1, (10, 6))
+            options = body[20 + caplen + (-caplen % 4):]
+            packets.append(Packet(len(packets) + 1, _to_ns((ts_hi << 32) | ts_lo, resol),
+                                  linktype, body[20:20 + caplen], orig,
+                                  _option_strings(options, endian, 1)))
         elif btype == 3:  # Simple Packet Block (no timestamp)
             linktype = interfaces[0][0] if interfaces else 1
-            packets.append(Packet(len(packets) + 1, 0.0, linktype, body[4:]))
+            orig = struct.unpack(endian + "I", body[0:4])[0]
+            packets.append(Packet(len(packets) + 1, 0, linktype, body[4:4 + orig], orig))
         offset += blen
     return packets
 
 
-def _if_tsresol(options: bytes, endian: str) -> float:
-    """Seconds per timestamp unit from the IDB if_tsresol option (default microseconds)."""
+def _to_ns(ticks: int, resol: tuple[int, int]) -> int:
+    """A pcapng timestamp in units of base**-exponent seconds, as whole nanoseconds."""
+    base, exp = resol
+    if base == 2:
+        return (ticks * 10**9) >> exp
+    return ticks * 10**(9 - exp) if exp <= 9 else ticks // 10**(exp - 9)
+
+
+def _option_strings(options: bytes, endian: str, wanted: int) -> list[str]:
+    """The UTF-8 values of every option with code `wanted` (1 = comment)."""
+    found, i = [], 0
+    while i + 4 <= len(options):
+        code, length = struct.unpack(endian + "HH", options[i:i + 4])
+        if code == 0:
+            break
+        if code == wanted:
+            found.append(options[i + 4:i + 4 + length].decode("utf-8", "replace"))
+        i += 4 + length + (-length % 4)
+    return found
+
+
+def _if_tsresol(options: bytes, endian: str) -> tuple[int, int]:
+    """Timestamp unit from the IDB if_tsresol option, as (base, exponent): units of
+    base**-exponent seconds. The default is microseconds, (10, 6)."""
     i = 0
     while i + 4 <= len(options):
         code, length = struct.unpack(endian + "HH", options[i:i + 4])
@@ -117,9 +158,9 @@ def _if_tsresol(options: bytes, endian: str) -> float:
             break
         if code == 9 and length >= 1:
             v = options[i + 4]
-            return 2.0 ** -(v & 0x7F) if v & 0x80 else 10.0 ** -v
+            return (2, v & 0x7F) if v & 0x80 else (10, v)
         i += 4 + length + (-length % 4)
-    return 1e-6
+    return (10, 6)
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +334,26 @@ def describe_answer(dns: DnsMessage) -> str:
     return RCODES.get(dns.rcode, f"rcode {dns.rcode}") if dns.rcode else "(no answer)"
 
 
+def find_required(items: list[DnsPacket], name: str,
+                  ip: str) -> tuple[DnsPacket, DnsPacket, int] | None:
+    """The required exchange: an A query for `name` and the response that answers `ip`.
+
+    Returns (query, response, TTL of the answer), or None if the capture lacks it.
+    """
+    wanted = name.rstrip(".").lower()
+    for query in items:
+        if query.dns.is_response or (wanted, "A") not in [
+                (n.lower(), t) for n, t in query.dns.questions]:
+            continue
+        resp = match_response(query, items)
+        if resp is None:
+            continue
+        for _, rtype, ttl, value in resp.dns.answers:
+            if rtype == "A" and value == ip:
+                return query, resp, ttl
+    return None
+
+
 def render(path: str, items: list[DnsPacket], name: str, ip: str) -> tuple[str, bool]:
     lines = [f"DNS messages in `{path}` (UDP port {DNS_PORT}):", "",
              "| No. | Time (s) | Source | Destination | Type | Transaction ID | Question | "
@@ -307,22 +368,11 @@ def render(path: str, items: list[DnsPacket], name: str, ip: str) -> tuple[str, 
             f" | {it.dgram.dst}:{it.dgram.dport} | {kind} | 0x{it.dns.txid:04x} | {q} | "
             f"{describe_answer(it.dns)} | {it.dns.flags_text()} |")
 
-    # Find the required exchange: an A query for `name` answered with `ip`.
     wanted = name.rstrip(".").lower()
-    passed = False
-    for query in items:
-        if query.dns.is_response or (wanted, "A") not in [
-                (n.lower(), t) for n, t in query.dns.questions]:
-            continue
-        resp = match_response(query, items)
-        if resp is None:
-            continue
-        a_records = [v for n, t, _, v in resp.dns.answers if t == "A"]
-        if ip not in a_records:
-            continue
-        passed = True
-        ttl = next(ttl for n, t, ttl, v in resp.dns.answers if t == "A" and v == ip)
-        q, r = query, resp
+    found = find_required(items, name, ip)
+    passed = found is not None
+    if found:
+        q, r, ttl = found
         lines += [
             "", "Annotation of the required lookup:", "",
             f"- **Frame {q.packet.number}: DNS Standard Query.** {q.dgram.src} (the client) "
@@ -339,7 +389,6 @@ def render(path: str, items: list[DnsPacket], name: str, ip: str) -> tuple[str, 
             + f"). Reply code {RCODES.get(r.dns.rcode, r.dns.rcode)}. Answer: "
             f"**`{wanted}` A {ip}** (TTL {ttl} s).",
         ]
-        break
 
     others = [it for it in items if not it.dns.is_response
               and (wanted, "A") not in [(n.lower(), t) for n, t in it.dns.questions]]
@@ -353,11 +402,93 @@ def render(path: str, items: list[DnsPacket], name: str, ip: str) -> tuple[str, 
     return "\n".join(lines), passed
 
 
+# ---------------------------------------------------------------------------
+# Annotated copy (Wireshark packet comments)
+# ---------------------------------------------------------------------------
+
+def packet_comments(items: list[DnsPacket], found: tuple[DnsPacket, DnsPacket, int],
+                    name: str, ip: str) -> dict[int, str]:
+    """Wireshark packet comments, keyed by frame number, for every DNS packet."""
+    q, r, ttl = found
+    wanted = name.rstrip(".").lower()
+    comments = {
+        q.packet.number:
+            f"DNS STANDARD QUERY (client -> R1). {q.dgram.src} (bk-Client1, address from "
+            f"DHCP) asks the DNS server it learned from DHCP option 6, {q.dgram.dst} (R1), "
+            f"for the A record of {wanted}. UDP {q.dgram.sport} -> {q.dgram.dport} (DNS). "
+            f"Transaction ID 0x{q.dns.txid:04x}. Flags: {q.dns.flags_text()} "
+            "(RD = recursion desired).",
+        r.packet.number:
+            f"DNS STANDARD QUERY RESPONSE (R1 -> client). R1 answers {wanted} A {ip} "
+            f"(TTL {ttl} s): the game server's address. UDP {r.dgram.sport} (DNS) -> "
+            f"{r.dgram.dport}, same transaction ID 0x{r.dns.txid:04x} as frame "
+            f"{q.packet.number}, so the client matches it to that query. Flags: "
+            f"{r.dns.flags_text()} (QR = response"
+            + (", AA = authoritative: from R1's 'ip host' table" if r.dns.aa else "")
+            + f"). Reply code {RCODES.get(r.dns.rcode, r.dns.rcode)}.",
+    }
+    for it in items:
+        if it.packet.number in comments:
+            continue
+        kinds = ", ".join(t for _, t in it.dns.questions) or "?"
+        if it.dns.is_response:
+            text = (f"DNS response to the {kinds} query (transaction ID 0x{it.dns.txid:04x}): "
+                    f"{describe_answer(it.dns)}. Not part of the required lookup.")
+        else:
+            text = (f"DNS {kinds} query (transaction ID 0x{it.dns.txid:04x}). nslookup also "
+                    "asks for this; R1 has no such record, so it is not part of the "
+                    "required lookup.")
+        comments[it.packet.number] = text
+    return comments
+
+
+def _option(code: int, value: bytes) -> bytes:
+    return struct.pack("<HH", code, len(value)) + value + bytes(-len(value) % 4)
+
+
+def _block(btype: int, body: bytes) -> bytes:
+    length = 12 + len(body)
+    return struct.pack("<II", btype, length) + body + struct.pack("<I", length)
+
+
+def write_pcapng(path: str, packets: list[Packet], comments: dict[int, str],
+                 file_comment: str) -> None:
+    """Write the packets as pcapng with comments. Timestamps and bytes are unchanged.
+
+    Comments need pcapng: the classic pcap format has no place to store them.
+    """
+    end = struct.pack("<HH", 0, 0)
+    out = [_block(0x0A0D0D0A, struct.pack("<IHHq", 0x1A2B3C4D, 1, 0, -1)
+                  + _option(1, file_comment.encode("utf-8"))
+                  + _option(4, b"tools/dns_pcap_report.py --annotate") + end)]
+    iface_of: dict[int, int] = {}
+    for pkt in packets:
+        if pkt.linktype not in iface_of:
+            iface_of[pkt.linktype] = len(iface_of)
+            out.append(_block(1, struct.pack("<HHI", pkt.linktype, 0, 0)
+                              + _option(9, bytes([9])) + end))  # nanosecond timestamps
+    for pkt in packets:
+        texts = list(pkt.comments)                  # keep comments already in the file
+        if pkt.number in comments and comments[pkt.number] not in texts:
+            texts.append(comments[pkt.number])     # (annotating twice adds nothing)
+        options = b"".join(_option(1, c.encode("utf-8")) for c in texts)
+        data = pkt.data + bytes(-len(pkt.data) % 4)
+        out.append(_block(6, struct.pack("<IIIII", iface_of[pkt.linktype], pkt.ts_ns >> 32,
+                                         pkt.ts_ns & 0xFFFFFFFF, len(pkt.data),
+                                         max(pkt.orig_len, len(pkt.data)))
+                          + data + (options + end if options else b"")))
+    with open(path, "wb") as f:
+        f.write(b"".join(out))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("capture", help=".pcap or .pcapng file")
     parser.add_argument("--name", default="server.kaanta.edu", help="name that must be queried")
     parser.add_argument("--ip", default="192.168.20.100", help="address the answer must contain")
+    parser.add_argument("--annotate", metavar="OUT",
+                        help="also write a copy with a Wireshark comment on every DNS packet "
+                             "(pcapng format, which is needed to store comments)")
     args = parser.parse_args(argv)
     try:
         packets = read_capture(args.capture)
@@ -368,6 +499,21 @@ def main(argv: list[str] | None = None) -> int:
     text, passed = render(args.capture, items, args.name, args.ip)
     print(f"{len(packets)} packets read, {len(items)} DNS messages.\n")
     print(text)
+    if args.annotate:
+        found = find_required(items, args.name, args.ip)
+        if found is None:
+            print(f"\n[ERROR] Not writing {args.annotate}: the required lookup is missing.")
+        else:
+            comments = packet_comments(items, found, args.name, args.ip)
+            q, r, _ = found
+            file_comment = (
+                "CS 457 Sprint 4 DNS capture, taken on the link between bk-R1 Gi0/1 and "
+                f"bk-Client1 eth0 while bk-Client1 ran 'nslookup {args.name.rstrip('.')}'. "
+                f"Frame {q.packet.number} is the query and frame {r.packet.number} is R1's "
+                f"answer, {args.ip}. Every DNS packet has a packet comment.")
+            write_pcapng(args.annotate, packets, comments, file_comment)
+            print(f"\nWrote {args.annotate}: {len(packets)} packets, {len(comments)} packet "
+                  "comments (pcapng format, so Wireshark keeps the comments).")
     return 0 if passed else 1
 
 

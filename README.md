@@ -75,7 +75,7 @@ The game runs on a Cisco Modeling Labs topology: one IOSv router, R1, connects t
 - [`cml/LAB_GUIDE.md`](cml/LAB_GUIDE.md): step-by-step build, verification, capture, and export
 - [`cml/pente_lab_import.yaml`](cml/pente_lab_import.yaml): ready-to-import CML lab (regenerate with `python tools/build_cml_lab.py` after editing [`cml/R1.cfg`](cml/R1.cfg))
 - [`sprint_4_network_report.md`](sprint_4_network_report.md): verification report
-- `python tools/dns_pcap_report.py sprint_4_dns_lookup.pcap`: checks and annotates the DNS capture
+- `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`: checks the raw CML capture, prints an annotated summary for the report, and writes the deliverable capture with a Wireshark comment on every DNS packet
 
 ## Documentation
 
