@@ -219,9 +219,9 @@ TODO
 
 **Annotations:** every DNS packet in [`sprint_4_dns_lookup.pcap`](sprint_4_dns_lookup.pcap) carries a Wireshark packet comment explaining it, and the file has a capture comment saying where and how it was captured. In Wireshark, a packet's comment appears at the top of its details pane under *Packet comments*, and *Statistics → Capture File Properties* lists them all. The comments were added with `python tools/dns_pcap_report.py dns_raw.pcap --annotate sprint_4_dns_lookup.pcap`, which copies the raw CML capture unchanged (same packets, same timestamps) and adds the comments. The file is stored in pcapng format, because the classic pcap format cannot hold comments; Wireshark opens it normally.
 
-**TODO (screenshot):** Wireshark with display filter `dns`, the response packet (frame 3) selected and *Answers* expanded, with arrows drawn to the query (frame 1) and the response (frame 3) → save as `docs/sprint_4/wireshark_dns.png`
-
 ![Wireshark DNS query and response](docs/sprint_4/wireshark_dns.png)
+
+*Annotated in green:* **frame 1**, the DNS **standard query** for `server.kaanta.edu` (A record) from Client 1 (192.168.10.2) to R1 (192.168.10.1); and **frame 3**, R1's **query response** with the answer **`server.kaanta.edu` A `192.168.20.100`**. Wireshark's bracket in the left margin links frame 1 to its response, frame 3: both carry transaction ID 0x2301. Frames 2 and 4 are the matching IPv6 (AAAA) query and its empty reply.
 
 ### Annotated exchange
 
