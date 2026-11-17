@@ -58,8 +58,7 @@ The board is drawn with grid lines like a real Pente board, with a heavy cross o
 | `pente/fsm.py` | `PenteServer`: the game state machine, guarded by one lock |
 | `tests/` | Unit and end-to-end tests |
 | `cml/` | Sprint 4 CML lab: router config, importable lab, lab guide |
-| `tools/demo_game.py` | Plays a scripted game with real server and client processes and saves the console logs |
-| `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log, Sprint 3 execution log |
+| `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log |
 
 ## Tests
 
@@ -86,4 +85,3 @@ The game runs on a Cisco Modeling Labs topology: one IOSv router, R1, connects t
 - [`docs/concurrency_design.md`](docs/concurrency_design.md): threading and locking
 - [`docs/sequence_diagram.md`](docs/sequence_diagram.md): message flow diagram
 - [`docs/ai_prompts.md`](docs/ai_prompts.md): AI usage strategy and prompt log
-- [`docs/sprint3_execution_log.md`](docs/sprint3_execution_log.md): Sprint 3 gameplay log (two clients, full game)

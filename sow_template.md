@@ -88,7 +88,7 @@
 
 ## 4. Coding & AI Implementation Plan (Sprint 3)
 
-> Code: [`server.py`](server.py), [`client.py`](client.py), and the shared [`pente/`](pente/) package. How to run it: [`README.md`](README.md). Gameplay log: [`docs/sprint3_execution_log.md`](docs/sprint3_execution_log.md).
+> Code: [`server.py`](server.py), [`client.py`](client.py), and the shared [`pente/`](pente/) package. How to run it: [`README.md`](README.md).
 
 - **Language:** Python 3.11, standard library only (`socket`, `threading`, `json`, `argparse`, `secrets`, `logging`, `dataclasses`). Nothing to install on the CML nodes.
 - **Permitted AI Tools:** Claude (Claude Code), used to generate the modules and their tests from my specs; GitHub Copilot for inline completion only.
@@ -102,8 +102,8 @@
 
   | Risk | How it was handled |
   |---|---|
-  | Running out of time with one big untested program | Built bottom-up in small modules, each with unit tests (81 tests). A scripted demo (`tools/demo_game.py`) replays a full game with real processes in seconds, so every change could be checked end to end |
-  | Developing on Windows, deploying to Linux CML nodes | Linux-only socket options (`TCP_KEEPIDLE`, `TCP_USER_TIMEOUT`) are applied only when present (`hasattr`). Output is plain ASCII for the lab consoles |
+  | Running out of time with one big untested program | Built bottom-up in small modules, each with unit tests (93 tests), including end-to-end tests that run the real server over TCP sockets, so every change could be checked quickly |
+  | Developing on Windows, deploying to Linux CML nodes | Linux-only socket options (`TCP_KEEPIDLE`, `TCP_USER_TIMEOUT`) are applied only when present (`hasattr`). The board is drawn with box-drawing lines by default; `client.py -b ascii` switches to plain ASCII if a lab console can't show them |
   | Reading keyboard input while server updates keep arriving | `input()` runs in its own thread and feeds a queue, so the board refreshes as soon as the opponent moves. (`select()` cannot watch the keyboard on Windows) |
   | Bugs that only show up with two clients at once | FSM tests send moves from two threads at the same time and check that turns never double up and both players see identical states in the same order |
   | Disconnect and rejoin paths are hard to test by hand | Tested with a killed client relaunched within 60 s, a cut connection through a TCP proxy (client rejoins on its own), and a shortened grace timer in the unit tests |

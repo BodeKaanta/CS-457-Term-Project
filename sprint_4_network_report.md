@@ -248,7 +248,7 @@ TODO
 
 ## 9. How this supports the game (Sprint 5)
 
-The Pente client resolves the server with `socket.gethostbyname("server.kaanta.edu")`. On a CML client node, that lookup reads `/etc/resolv.conf` (written by DHCP, §5), sends the query shown in §8 to R1, and connects to the returned 192.168.20.100 on TCP port 5457. R1 routes the traffic (§6). The server node's static address and default gateway (§4) let it accept those connections from both client subnets. If DNS breaks, the client prints its error ("Unable to resolve DNS hostname … check your Cisco router DNS configuration") and exits cleanly, as shown in the Sprint 3 log.
+The Pente client resolves the server with `socket.gethostbyname("server.kaanta.edu")`. On a CML client node, that lookup reads `/etc/resolv.conf` (written by DHCP, §5), sends the query shown in §8 to R1, and connects to the returned 192.168.20.100 on TCP port 5457. R1 routes the traffic (§6). The server node's static address and default gateway (§4) let it accept those connections from both client subnets. If DNS breaks, the client prints its error ("Unable to resolve DNS hostname … check your Cisco router DNS configuration") and exits cleanly (tested in Sprint 3).
 
 ## 10. Files in this submission
 
