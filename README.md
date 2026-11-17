@@ -57,8 +57,7 @@ The board is drawn with grid lines like a real Pente board, with a heavy cross o
 | `pente/game.py` | Pente rules (captures, five in a row) and Points Pente scoring |
 | `pente/fsm.py` | `PenteServer`: the game state machine, guarded by one lock |
 | `tests/` | Unit and end-to-end tests |
-| `tools/demo_game.py` | Plays a scripted game with real server and client processes and saves the console logs |
-| `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log, Sprint 3 execution log |
+| `docs/` | Protocol, FSM, concurrency design, sequence diagram, AI prompt log |
 
 ## Tests
 
@@ -76,4 +75,3 @@ The suite covers framing (including TCP fragmentation and coalescing), message v
 - [`docs/concurrency_design.md`](docs/concurrency_design.md): threading and locking
 - [`docs/sequence_diagram.md`](docs/sequence_diagram.md): message flow diagram
 - [`docs/ai_prompts.md`](docs/ai_prompts.md): AI usage strategy and prompt log
-- [`docs/sprint3_execution_log.md`](docs/sprint3_execution_log.md): Sprint 3 gameplay log (two clients, full game)
