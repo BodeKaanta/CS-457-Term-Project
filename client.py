@@ -3,7 +3,7 @@
 
 Usage:
     python3 client.py -h
-    python3 client.py -i server.kaanta.edu -p 5457 [-a Alice]
+    python3 client.py -i server.kaanta.edu -p 5457 [-a Alice] [-s dots]
 
 Threads:
     main      reads commands from the input queue and sends MOVE / DISCONNECT
@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 
+from pente import game
 from pente import messages as m
 from pente.framing import FrameReader, FrameTooLarge, encode_frame
 
@@ -34,6 +35,9 @@ RECONNECT_WINDOW_SEC = 60    # ... for up to 60 s (the server's grace period)
 SESSION_FILE_PREFIX = ".pente_session_"
 RECV_SIZE = 4096
 
+# Stone symbols, chosen with -s. "xo" is plain ASCII, which every console can
+# show (including the CML lab nodes). "dots" uses filled and hollow circles.
+STONE_STYLES = {"xo": ("X", "O"), "dots": ("●", "○")}  # dots: P1 filled, P2 hollow
 SYMBOL = {"1": "X", "2": "O", ".": "."}       # wire cell -> printed symbol
 PLAYER_SYMBOL = {"P1": "X", "P2": "O"}
 WIN_REASON_TEXT = {
@@ -44,7 +48,8 @@ WIN_REASON_TEXT = {
     "OPPONENT_TIMEOUT": "opponent did not reconnect in time",
 }
 HELP_TEXT = """Commands:
-  row col   place a stone, e.g. '9 9' (rows and columns are 0-18)
+  J10       place a stone: column letter A-S, then row number 1-19
+            (row 1 is at the bottom, like chess); J10 is the center
   board     redraw the board
   help      show this help
   quit      forfeit and leave the game"""
@@ -67,7 +72,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help=f"server TCP port (the project uses {DEFAULT_PORT})")
     parser.add_argument("-a", "--alias",
                         help="your player name: 1-16 letters, digits or '_' (asked if omitted)")
+    parser.add_argument("-s", "--stones", choices=sorted(STONE_STYLES), default="xo",
+                        help="stone symbols: xo = X and O (default), dots = filled and "
+                             "hollow circles")
     return parser.parse_args(argv)
+
+
+def set_stone_style(style: str) -> None:
+    """Switch the printed stone symbols ("xo" or "dots") for this process."""
+    p1, p2 = STONE_STYLES[style]
+    SYMBOL.update({"1": p1, "2": p2})
+    PLAYER_SYMBOL.update({"P1": p1, "P2": p2})
+    try:
+        (p1 + p2).encode(sys.stdout.encoding or "ascii")
+    except (UnicodeEncodeError, LookupError):
+        # This output can't show the circles (e.g. piped output on Windows).
+        # Switch it to UTF-8 rather than crash with UnicodeEncodeError.
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
 
 
 def port_number(text: str) -> int:
@@ -156,26 +180,27 @@ def delete_session(alias: str) -> None:
 # ---------------------------------------------------------------------------
 
 def parse_move(text: str) -> tuple[int, int] | None:
-    """Parse 'row col' (a comma also works). Bounds are checked by the server."""
-    parts = text.replace(",", " ").split()
-    if len(parts) != 2:
-        return None
-    try:
-        return int(parts[0]), int(parts[1])
-    except ValueError:
-        return None
+    """Parse a chess-style move like 'J10' into wire (row, col).
+
+    Bounds are checked by the server, so 'T5' or 'A20' still parse.
+    """
+    return game.from_notation(text)
 
 
 def render_board(board: list[str], last_move: dict | None) -> str:
-    """Draw the board with row/column numbers. The last move is shown in [ ]."""
+    """Draw the board with column letters and row numbers. The last move is in [ ]."""
     last = (last_move["row"], last_move["col"]) if last_move else None
-    lines = ["    " + "".join(f" {c:<2}" for c in range(len(board[0])))]
+    size = len(board)
+    letters = "    " + "".join(f" {game.COLUMNS[c]} " for c in range(len(board[0])))
+    lines = [letters]
     for r, row in enumerate(board):
         cells = []
         for c, cell in enumerate(row):
             sym = SYMBOL.get(cell, "?")
             cells.append(f"[{sym}]" if (r, c) == last else f" {sym} ")
-        lines.append(f"{r:>3} " + "".join(cells) + f" {r}")
+        number = size - r          # row 1 at the bottom, like chess
+        lines.append(f"{number:>3} " + "".join(cells) + f" {number}")
+    lines.append(letters)
     return "\n".join(lines)
 
 
@@ -510,7 +535,7 @@ class PenteClient:
                     and s["game_status"] == "ACTIVE" and s["active_player"] == self.player_id)
 
     def turn_prompt(self) -> str:
-        return ">>> YOUR TURN. Enter your move as 'row col' (example: 9 9), or 'quit'."
+        return ">>> YOUR TURN. Enter your move as letter + number (example: J10), or 'quit'."
 
     def render_state(self) -> str:
         with self.lock:
@@ -526,9 +551,10 @@ class PenteClient:
         lm = s["last_move"]
         if lm:
             who = self.alias if lm["player"] == me else opp_alias
-            text = f"Last move: {who} ({PLAYER_SYMBOL[lm['player']]}) at {lm['row']} {lm['col']}"
+            where = game.to_notation(lm["row"], lm["col"])
+            text = f"Last move: {who} ({PLAYER_SYMBOL[lm['player']]}) at {where}"
             if lm["captured"]:
-                stones = ", ".join(f"{r} {c}" for r, c in lm["captured"])
+                stones = ", ".join(game.to_notation(r, c) for r, c in lm["captured"])
                 text += f" and captured {len(lm['captured']) // 2} pair ({stones})"
             lines.append(text)
         status = s["game_status"]
@@ -570,7 +596,8 @@ class PenteClient:
 
         move = parse_move(cmd)
         if move is None:
-            self.say("[INPUT] Type a move as two numbers 'row col' (e.g. 9 9), or 'help'.")
+            self.say("[INPUT] Type a move as a column letter A-S and a row number 1-19 "
+                     "(e.g. J10), or 'help'.")
             if self.my_turn():
                 self.say(self.turn_prompt())
             return
@@ -651,6 +678,7 @@ class PenteClient:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    set_stone_style(args.stones)
     hostname = args.hostname.strip()
     if not hostname:
         print("[ERROR] The server hostname (-i) cannot be empty.")

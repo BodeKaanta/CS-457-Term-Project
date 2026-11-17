@@ -19,7 +19,7 @@ This document is the single source of truth for every byte exchanged between `cl
 | Framing | **Newline-delimited JSON (NDJSON)**: every message is exactly one JSON object followed by one `\n` (`0x0A`) |
 | Max frame size | **8192 bytes** including the `\n` |
 | Protocol version | `1` |
-| Client interface | **Terminal only.** The board is printed as text and moves are typed as `row col`. No GUI, no 2D/3D graphics (CML lab nodes are console-only) |
+| Client interface | **Terminal only.** The board is printed as text and moves are typed chess-style, e.g. `J10` (column letter A–S, row number 1–19 from the bottom). The client converts that to the wire `row`/`col`. No GUI, no 2D/3D graphics (CML lab nodes are console-only) |
 
 ### 1.1 Framing Rule (normative)
 
@@ -129,7 +129,7 @@ def send_msg(sock, msg: dict) -> None:
 
 - Unknown top-level keys are ignored (forward compatibility). Missing required keys → `ERROR MISSING_FIELD`.
 - A client's `player_id` must match the role bound to **that socket**. The server identifies players by connection, never by the self-reported `player_id`. A mismatch → `ERROR PLAYER_ID_MISMATCH`.
-- Board coordinates are 0-indexed: `row` 0–18 (top→bottom), `col` 0–18 (left→right). The center point is `(9, 9)`.
+- Board coordinates are 0-indexed: `row` 0–18 (top→bottom), `col` 0–18 (left→right). The center point is `(9, 9)`. Players never see these numbers: the client shows and accepts chess-style points, where `J10` is `(9, 9)`, `A19` is `(0, 0)` and `A1` is `(18, 0)` (`pente/game.py` `to_notation` / `from_notation`).
 
 **Board encoding** (used in `STATE_UPDATE` and `GAME_OVER`): an array of **19 strings**, each **19 characters** long. `board[row][col]` is `"."` (empty), `"1"` (P1 stone) or `"2"` (P2 stone).
 

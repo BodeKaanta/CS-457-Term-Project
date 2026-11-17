@@ -28,11 +28,12 @@ PROMPT = ">>> YOUR TURN"
 
 # Each entry is typed when that client shows ">>> YOUR TURN". Rejected or
 # unparseable entries re-print the prompt, so the next entry follows them.
-# The game: Bob's pair at (9,10)-(9,11) is captured by Alice's (9,12), then
-# Alice completes the diagonal (5,5)-(9,9) for five in a row.
+# The game: Bob's pair at K10-L10 is captured by Alice's M10, then Alice
+# completes the diagonal F14-J10 for five in a row. Bob's J10 (occupied) and
+# T5 (column T is off the board) are rejected by the server.
 SCRIPT = {
-    "Alice": ["9 9", "7 7", "9 12", "hello", "8 8", "6 6", "5 5"],
-    "Bob": ["9 10", "9 11", "9 9", "0 0", "19 5", "0 1", "0 2"],
+    "Alice": ["J10", "H12", "M10", "hello", "I11", "G13", "F14"],
+    "Bob": ["K10", "L10", "J10", "A19", "T5", "B19", "C19"],
 }
 
 
@@ -106,10 +107,10 @@ def write_markdown(cli: str, server: list[str], alice: list[str], bob: list[str]
                    port: str, host: str) -> None:
     """Assemble docs/sprint3_execution_log.md from the captured consoles."""
     alice_start = excerpt(alice, "[INFO] Resolved", "Waiting for Bob (P2) to move...", 2)
-    alice_capture = excerpt(alice, "> 9 12", "Waiting for Bob (P2) to move...")
-    alice_end = alice[next(i for i, line in enumerate(alice) if line == "> 5 5"):]
-    bob_errors = excerpt(bob, "> 9 9", PROMPT)
-    bob_oob = excerpt(bob, "> 19 5", PROMPT)
+    alice_capture = excerpt(alice, "> M10", "Waiting for Bob (P2) to move...")
+    alice_end = alice[next(i for i, line in enumerate(alice) if line == "> F14"):]
+    bob_errors = excerpt(bob, "> J10", PROMPT)
+    bob_oob = excerpt(bob, "> T5", PROMPT)
     text = f"""# Sprint 3 Execution Log: Two Clients, One Full Game
 
 **Project:** CS 457 Term Project: Networked Pente
@@ -127,7 +128,7 @@ This log was recorded with the real `server.py` and two real `client.py` process
 | Client catches `socket.gaierror` and fails gracefully | Section 1: `server.kaanta.edu` does not resolve on this machine yet (Router R2's DNS comes in Sprint 4). The client prints the error and exits with status 1, with no traceback |
 | Server accepts 2 simultaneous clients and runs FSM transitions cleanly | Section 2: `conn-1` and `conn-2` each get a handler thread. Every transition is logged with its row ID from `fsm_specification.md` (L1, L3, G1, G2, G5-G8, G11) |
 | At least 3 turns of gameplay | 11 moves were played: a capture at move 5, an occupied cell and an off-board move rejected (P2 kept the turn), then P1 won with five in a row on a diagonal |
-| CLI board, turn status, and score summaries | Section 3: the board with row/column numbers, `>>> YOUR TURN` / `Waiting for Bob (P2) to move...`, live captures on every turn, then round points and the session leaderboard |
+| CLI board, turn status, and score summaries | Section 3: the board with column letters A-S and row numbers 1-19, `>>> YOUR TURN` / `Waiting for Bob (P2) to move...`, live captures on every turn, then round points and the session leaderboard |
 
 ## 1. Command-line help and DNS failure
 
@@ -147,7 +148,7 @@ Thread names are in brackets: `MainThread` accepts connections; `conn-1` (Alice)
 
 ### Alice: a capture (move 5)
 
-Bob's stones at `9 10` and `9 11` sit between Alice's `9 9` and her new stone at `9 12`, so the server removes them and Alice's capture count goes to 1.
+Bob's stones at `K10` and `L10` sit between Alice's `J10` and her new stone at `M10`, so the server removes them and Alice's capture count goes to 1.
 
 {block(alice_capture)}
 

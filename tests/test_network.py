@@ -201,20 +201,42 @@ class ClientCliTests(unittest.TestCase):
 
 class ClientHelperTests(unittest.TestCase):
     def test_parse_move(self):
-        self.assertEqual(client.parse_move("9 9"), (9, 9))
-        self.assertEqual(client.parse_move(" 3,17 "), (3, 17))
-        self.assertEqual(client.parse_move("19 5"), (19, 5))  # bounds are the server's job
-        for bad in ("", "9", "a b", "1 2 3"):
-            self.assertIsNone(client.parse_move(bad))
+        # Column letter (x) then row number (y), row 1 at the bottom.
+        self.assertEqual(client.parse_move("J10"), (9, 9))      # center
+        self.assertEqual(client.parse_move(" j 10 "), (9, 9))
+        self.assertEqual(client.parse_move("A1"), (18, 0))      # bottom-left
+        self.assertEqual(client.parse_move("A19"), (0, 0))      # top-left
+        self.assertEqual(client.parse_move("S1"), (18, 18))     # bottom-right
+        # Off the board still parses; the server rejects it with OUT_OF_BOUNDS.
+        self.assertEqual(client.parse_move("T5"), (14, 19))
+        self.assertEqual(client.parse_move("A20"), (-1, 0))
+        for bad in ("", "K", "10", "9 9", "KK10", "K1O", "K100", "10K"):
+            self.assertIsNone(client.parse_move(bad), bad)
 
     def test_render_board_marks_last_move(self):
         board = ["." * 19 for _ in range(19)]
-        board[9] = "." * 9 + "1" + "2" + "." * 8
+        board[9] = "." * 9 + "1" + "2" + "." * 8      # X at J10, O at K10
         text = client.render_board(board, {"player": "P2", "row": 9, "col": 10, "captured": []})
         lines = text.splitlines()
-        self.assertEqual(len(lines), 20)  # header + 19 rows
+        self.assertEqual(len(lines), 21)  # letters + 19 rows + letters
+        self.assertEqual(lines[0].split(), list("ABCDEFGHIJKLMNOPQRS"))
+        self.assertTrue(lines[1].startswith(" 19 ") and lines[19].startswith("  1 "))
+        self.assertTrue(lines[10].startswith(" 10 "))
         self.assertIn(" X [O]", lines[10])
+        self.assertEqual(lines[10].index("X"), lines[0].index("J"))  # X sits under J
         self.assertTrue(all(ord(ch) < 128 for ch in text))  # plain ASCII for lab consoles
+
+    def test_dots_stone_style(self):
+        board = ["." * 19 for _ in range(19)]
+        board[9] = "." * 9 + "12" + "." * 8
+        try:
+            client.set_stone_style("dots")
+            text = client.render_board(board, None)
+            self.assertIn(" ●  ○ ", text.splitlines()[10])
+            self.assertEqual(client.PLAYER_SYMBOL["P1"], "●")
+        finally:
+            client.set_stone_style("xo")
+        self.assertEqual(client.PLAYER_SYMBOL, {"P1": "X", "P2": "O"})
 
 
 if __name__ == "__main__":
